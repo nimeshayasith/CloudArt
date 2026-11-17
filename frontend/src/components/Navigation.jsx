@@ -1,4 +1,5 @@
 import { useState, useEffect } from 'react'
+import { Link } from 'react-router-dom'
 import { brand, nav } from '../content/site'
 
 export default function Navigation() {
@@ -36,12 +37,13 @@ export default function Navigation() {
           {nav.map(l => (
             <a key={l.href} href={l.href} className="hover:text-ca-gold transition-colors">{l.label}</a>
           ))}
-          <a
-            href="#contact"
-            className="border border-ca-gold/50 text-ca-gold px-4 py-1.5 rounded-full hover:bg-ca-gold hover:text-ca-bg transition-all font-medium"
+          <Link to="/login" className="hover:text-ca-gold transition-colors">Log in</Link>
+          <Link
+            to="/register"
+            className="bg-ca-gold text-ca-bg px-4 py-1.5 rounded-full hover:bg-[#ffd47a] transition-all font-medium"
           >
-            Contact
-          </a>
+            Sign up
+          </Link>
         </div>
 
         <button
@@ -65,6 +67,8 @@ export default function Navigation() {
               {l.label}
             </a>
           ))}
+          <Link to="/login" className="py-3 text-ca-text border-b border-white/5 hover:text-ca-gold">Log in</Link>
+          <Link to="/register" className="mt-4 text-center font-semibold py-3 rounded-full bg-ca-gold text-ca-bg">Sign up</Link>
         </div>
       )}
     </header>

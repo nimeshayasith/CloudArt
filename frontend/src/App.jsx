@@ -1,26 +1,20 @@
-import Navigation from './components/Navigation'
-import Hero from './components/Hero'
-import Services from './components/Services'
-import ArchitectureReveal from './components/ArchitectureReveal'
-import BusinessModel from './components/BusinessModel'
-import Roadmap from './components/Roadmap'
-import Contact from './components/Contact'
+import { Navigate, Route, Routes } from 'react-router-dom'
+import ProtectedRoute from './auth/ProtectedRoute'
+import Dashboard from './pages/Dashboard'
+import Home from './pages/Home'
+import Login from './pages/Login'
+import Register from './pages/Register'
+import VerifyEmail from './pages/VerifyEmail'
 
 export default function App() {
   return (
-    <div className="min-h-screen bg-ca-bg overflow-x-hidden">
-      <a href="#services" className="sr-only focus:not-sr-only focus:fixed focus:top-3 focus:left-3 focus:z-50 focus:bg-ca-gold focus:text-ca-bg focus:px-4 focus:py-2 focus:rounded">
-        Skip to content
-      </a>
-      <Navigation />
-      <main>
-        <Hero />
-        <Services />
-        <ArchitectureReveal />
-        <BusinessModel />
-        <Roadmap />
-        <Contact />
-      </main>
-    </div>
+    <Routes>
+      <Route path="/" element={<Home />} />
+      <Route path="/register" element={<Register />} />
+      <Route path="/verify" element={<VerifyEmail />} />
+      <Route path="/login" element={<Login />} />
+      <Route path="/dashboard" element={<ProtectedRoute><Dashboard /></ProtectedRoute>} />
+      <Route path="*" element={<Navigate to="/" replace />} />
+    </Routes>
   )
 }

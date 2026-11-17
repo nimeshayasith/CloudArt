@@ -5,6 +5,10 @@ const schema = z.object({
   PORT: z.coerce.number().int().positive().default(4000),
   CORS_ORIGIN: z.string().default('http://localhost:5173'),
   DATABASE_URL: z.string().min(1, 'DATABASE_URL is required'),
+  COGNITO_REGION: z.string().min(1),
+  COGNITO_USER_POOL_ID: z.string().min(1),
+  COGNITO_APP_CLIENT_ID: z.string().min(1),
+  WHATSAPP_COMMUNITY_URL: z.string().default(''),
 })
 
 const parsed = schema.safeParse(process.env)

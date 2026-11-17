@@ -28,3 +28,5 @@ _private/
 .env
 .env.*
 !.env.example
+frontend/test-results/
+frontend/playwright-report/
