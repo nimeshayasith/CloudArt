@@ -39,7 +39,17 @@ export async function studentDashboard(userId) {
         id: true,
         status: true,
         enrolledAt: true,
-        course: { select: { id: true, title: true, slug: true, difficulty: true, category: { select: { name: true } } } },
+        course: {
+          select: {
+            id: true,
+            title: true,
+            slug: true,
+            difficulty: true,
+            category: { select: { name: true } },
+            modules: { where: { isPublished: true }, select: { lessons: { where: { isPublished: true }, select: { id: true } } } },
+          },
+        },
+        lessonProgress: { where: { completed: true }, select: { lessonId: true } },
       },
     }),
     prisma.course.findMany({
@@ -56,12 +66,18 @@ export async function studentDashboard(userId) {
       inProgress: enrollments.filter((e) => e.status === 'ACTIVE').length,
       completed: enrollments.filter((e) => e.status === 'COMPLETED').length,
     },
-    enrollments: enrollments.map((e) => ({
-      id: e.id,
-      status: e.status,
-      enrolledAt: e.enrolledAt,
-      course: { id: e.course.id, title: e.course.title, slug: e.course.slug, difficulty: e.course.difficulty, category: e.course.category.name },
-    })),
+    enrollments: enrollments.map((e) => {
+      // Only lessons that are still published count, so unpublishing a lesson never pushes progress past 100%.
+      const live = new Set(e.course.modules.flatMap((m) => m.lessons.map((l) => l.id)))
+      const completedLessons = e.lessonProgress.filter((p) => live.has(p.lessonId)).length
+      return {
+        id: e.id,
+        status: e.status,
+        enrolledAt: e.enrolledAt,
+        course: { id: e.course.id, title: e.course.title, slug: e.course.slug, difficulty: e.course.difficulty, category: e.course.category.name },
+        progress: { completedLessons, totalLessons: live.size, percent: live.size ? Math.round((completedLessons / live.size) * 100) : 0 },
+      }
+    }),
     explore: explore.map((c) => ({ id: c.id, title: c.title, slug: c.slug, description: c.description, difficulty: c.difficulty, category: c.category.name })),
   }
 }

@@ -7,6 +7,7 @@ import { adminRouter } from './modules/admin/admin.routes.js'
 import { authRouter } from './modules/auth/auth.routes.js'
 import { courseRouter } from './modules/courses/course.routes.js'
 import { healthRouter } from './modules/health/health.routes.js'
+import { learningRouter } from './modules/learning/learning.routes.js'
 import { userRouter } from './modules/users/user.routes.js'
 
 export function createApp() {
@@ -21,6 +22,7 @@ export function createApp() {
   app.use('/api/v1/users', userRouter)
   app.use('/api/v1/courses', courseRouter)
   app.use('/api/v1/admin', adminRouter)
+  app.use('/api/v1', learningRouter)
 
   app.use(notFound)
   app.use(errorHandler)

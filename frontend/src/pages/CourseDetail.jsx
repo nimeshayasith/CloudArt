@@ -1,10 +1,57 @@
 import { useEffect, useState } from 'react'
-import { Link, useParams } from 'react-router-dom'
+import { Link, useNavigate, useParams } from 'react-router-dom'
 import { useAuth } from '../auth/AuthContext'
 import { LoadError, Loading, Panel } from '../components/AppShell'
 import PublicShell from '../components/PublicShell'
-import { api, ApiError } from '../lib/api'
+import { api, ApiError, authedApi } from '../lib/api'
 import { formatDuration, plural, pretty } from '../lib/format'
+
+/** Enroll / continue box for a signed-in student. */
+function EnrollBox({ slug }) {
+  const navigate = useNavigate()
+  const [state, setState] = useState(null) // null = loading, otherwise { enrolled }
+  const [busy, setBusy] = useState(false)
+  const [error, setError] = useState('')
+
+  useEffect(() => {
+    let stale = false
+    authedApi(`/courses/${encodeURIComponent(slug)}/enrollment`)
+      .then((d) => !stale && setState(d))
+      .catch((e) => !stale && setError(e.message))
+    return () => { stale = true }
+  }, [slug])
+
+  const enroll = async () => {
+    setBusy(true)
+    setError('')
+    try {
+      await authedApi(`/courses/${encodeURIComponent(slug)}/enroll`, { method: 'POST' })
+      navigate(`/learn/${slug}`)
+    } catch (e) {
+      setError(e.message)
+      setBusy(false)
+    }
+  }
+
+  return (
+    <div className="space-y-3">
+      <p role="alert" className="text-sm text-red-300">{error}</p>
+      {!state && !error && <p role="status" className="text-sm text-ca-muted font-mono">Checking your enrollment…</p>}
+      {state?.enrolled && (
+        <>
+          <p className="text-sm text-emerald-300">You’re enrolled in this course.</p>
+          <Link to={`/learn/${slug}`} className="block text-center font-display font-semibold text-sm py-2.5 rounded-full bg-ca-gold text-ca-bg hover:bg-[#ffd47a]">Continue learning</Link>
+        </>
+      )}
+      {state && !state.enrolled && (
+        <>
+          <p className="text-sm text-ca-muted">Join this course to watch the lessons and track your progress.</p>
+          <button type="button" disabled={busy} onClick={enroll} className="w-full font-display font-semibold text-sm py-2.5 rounded-full bg-ca-gold text-ca-bg hover:bg-[#ffd47a] disabled:opacity-60">{busy ? 'Enrolling…' : 'Enroll for free'}</button>
+        </>
+      )}
+    </div>
+  )
+}
 
 export default function CourseDetail() {
   const { slug } = useParams()
@@ -80,10 +127,10 @@ export default function CourseDetail() {
         <aside className="rounded-2xl border border-white/10 bg-ca-bg2/60 p-5 space-y-3">
           <p className="font-display font-semibold text-ca-text">{course.isFree ? 'Free course' : 'Course'}</p>
           {user ? (
-            <p className="text-sm text-ca-muted">Enrollment and the video player are coming in the next release. You’ll be able to join this course right from here.</p>
+            <EnrollBox slug={course.slug} />
           ) : (
             <>
-              <p className="text-sm text-ca-muted">Create a free account to follow this course when enrollment opens.</p>
+              <p className="text-sm text-ca-muted">Create a free account to enroll and follow this course.</p>
               <Link to="/register" className="block text-center font-display font-semibold text-sm py-2.5 rounded-full bg-ca-gold text-ca-bg hover:bg-[#ffd47a]">Create free account</Link>
               <Link to="/login" className="block text-center text-sm text-ca-muted hover:text-ca-gold">I already have an account</Link>
             </>

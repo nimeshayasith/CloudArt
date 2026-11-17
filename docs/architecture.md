@@ -66,6 +66,12 @@ Modules share the database but not business logic.
 | `PATCH/DELETE /admin/modules/:id` | admin | Edit, publish/unpublish, delete a module |
 | `POST /admin/modules/:id/lessons`, `PUT /admin/modules/:id/lessons/order` | admin | Add a lesson (YouTube link or 11-character id); reorder |
 | `PATCH/DELETE /admin/lessons/:id` | admin | Edit, publish/unpublish, delete a lesson |
+| `GET /courses/:slug/enrollment` | signed in | `{ enrolled, status }` for the caller |
+| `POST /courses/:slug/enroll` | signed in | Join a `PUBLISHED` course. Idempotent; re-joining after leaving restores the old progress |
+| `DELETE /courses/:slug/enroll` | signed in | Leave a course (`DROPPED`); progress is kept |
+| `GET /learn/:slug` | enrolled | Course outline for the player: published content, per-lesson progress, overall progress, resume point. **No video ids** |
+| `GET /learn/lessons/:lessonId` | enrolled, or any signed-in user for free-preview lessons | One lesson's `youtubeVideoId` and `startSeconds`. Video ids are released one lesson at a time |
+| `PUT /learn/lessons/:lessonId/progress` | enrolled | Save `{ positionSeconds, durationSeconds? }`; returns the lesson's state and course progress (60 requests/min per user) |
 
 A disabled user is locked out immediately: the next API call returns `403 ACCOUNT_DISABLED`,
 and the login screen shows the message without keeping a session.
@@ -78,7 +84,22 @@ and the login screen shows the message without keeping a session.
   students have watched cannot be deleted (`409 HAS_STUDENT_PROGRESS`): unpublish them.
 - Bodies are strict: unknown or privileged fields (`status` on create, `createdById`, `slug`, …) are rejected with `400`.
 
-Course progress percentages and enrollment arrive with the course player (Phase 5); until then the syllabus page says so instead of showing a fake button.
+**Learning rules (Phase 5)**
+
+- Learning needs an `ACTIVE`/`COMPLETED` enrollment. Courses an admin has archived stay open to students who were already
+  enrolled; draft (unpublished) courses are closed. New enrollments need a `PUBLISHED` course.
+- `lastPositionSeconds` is the resume point and can move backwards. `maxPositionSeconds` is the furthest point reached and
+  can advance only as fast as real time allows (2x speed plus 30 s slack since the previous save), so a forged request
+  cannot complete a lesson. This records progress; it does not claim to prove the video was watched.
+- A lesson completes when its furthest point reaches the course's watch threshold (`exam_policies.lesson_watch_threshold_pct`,
+  default 90 %). The lesson length is the admin's value, or the player-reported one when the admin left it at 0. A completed
+  lesson never un-completes, and re-opens from the start.
+- "Continue learning" opens the lesson watched last at its saved position, or the next unfinished lesson if that one is complete.
+- Percentages count only lessons that are still published, so unpublishing never pushes progress past 100 %.
+- The player uses YouTube's IFrame API through `youtube-nocookie.com`. Browser tests substitute a fake of that API;
+  the real one was checked separately (ready, start position, duration, play/pause, destroy).
+- Free-preview lessons can be opened by any signed-in user through the API, but there is no UI for it yet.
+- Enrollment status stays `ACTIVE`: `COMPLETED` is reserved for passing the final exam (Phase 7).
 
 ## Environments
 
@@ -90,8 +111,8 @@ Course progress percentages and enrollment arrive with the course player (Phase 
 1. Repo, React, Express, PostgreSQL, Prisma — done
 2. Cognito: register, verify email, login, profiles — done
 3. Student/admin dashboards — done
-4. Categories, courses, modules, lessons  ← **this phase**
-5. Enrollment, YouTube player, resume-where-you-left-off
+4. Categories, courses, modules, lessons — done
+5. Enrollment, YouTube player, resume-where-you-left-off  ← **this phase**
 6. Module quizzes + question management (+ Excel import/export)
 7. Final exam + locking
 8. Reports and exports

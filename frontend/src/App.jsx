@@ -7,6 +7,7 @@ import CourseDetail from './pages/CourseDetail'
 import Courses from './pages/Courses'
 import Dashboard from './pages/Dashboard'
 import Home from './pages/Home'
+import Learn from './pages/Learn'
 import Login from './pages/Login'
 import Profile from './pages/Profile'
 import Register from './pages/Register'
@@ -21,6 +22,7 @@ export default function App() {
       <Route path="/login" element={<Login />} />
       <Route path="/courses" element={<Courses />} />
       <Route path="/courses/:slug" element={<CourseDetail />} />
+      <Route path="/learn/:slug" element={<ProtectedRoute><Learn /></ProtectedRoute>} />
       <Route path="/dashboard" element={<ProtectedRoute><Dashboard /></ProtectedRoute>} />
       <Route path="/dashboard/profile" element={<ProtectedRoute><Profile /></ProtectedRoute>} />
       <Route path="/admin" element={<ProtectedRoute admin><AdminDashboard /></ProtectedRoute>} />

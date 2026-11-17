@@ -186,7 +186,7 @@ test('student: browses the catalog, opens a course from the dashboard, and canno
   await expect(page.getByText('Preview lesson')).toBeVisible()
   await expect(page.getByText('15 min').first()).toBeVisible()
   await expect(page.getByText('Preview', { exact: true })).toBeVisible()
-  await expect(page.getByText(/Enrollment and the video player are coming/)).toBeVisible()
+  await expect(page.getByRole('button', { name: 'Enroll for free' })).toBeVisible()
   await expect(page.getByRole('link', { name: 'Create free account' })).toHaveCount(0) // already signed in
 
   // Catalog is reachable from the signed-in shell; students get no admin navigation.

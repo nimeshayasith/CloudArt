@@ -51,12 +51,19 @@ export default function Dashboard() {
             ) : (
               <ul className="divide-y divide-white/10">
                 {data.enrollments.map((e) => (
-                  <li key={e.id} className="py-3 flex items-center justify-between gap-3">
-                    <div className="min-w-0">
-                      <Link to={`/courses/${e.course.slug}`} className="block text-ca-text font-medium truncate hover:text-ca-gold">{e.course.title}</Link>
+                  <li key={e.id} className="py-3 flex flex-wrap items-center gap-x-4 gap-y-2" data-testid="enrollment-row">
+                    <div className="min-w-0 flex-1 basis-56">
+                      <Link to={`/learn/${e.course.slug}`} className="block text-ca-text font-medium truncate hover:text-ca-gold">{e.course.title}</Link>
                       <CourseMeta course={e.course} />
+                      <div className="mt-2 flex items-center gap-2">
+                        <div role="progressbar" aria-label={`Progress in ${e.course.title}`} aria-valuemin={0} aria-valuemax={100} aria-valuenow={e.progress.percent} className="h-1.5 flex-1 max-w-48 rounded-full bg-white/10 overflow-hidden">
+                          <div className="h-full rounded-full bg-ca-gold" style={{ width: `${e.progress.percent}%` }} />
+                        </div>
+                        <span className="text-xs text-ca-muted">{e.progress.completedLessons}/{e.progress.totalLessons} lessons · {e.progress.percent}%</span>
+                      </div>
                     </div>
                     <span className={`shrink-0 text-xs border rounded-full px-2.5 py-0.5 ${STATUS_STYLE[e.status] ?? 'text-ca-muted border-white/20'}`}>{pretty(e.status)}</span>
+                    <Link to={`/learn/${e.course.slug}`} aria-label={`Continue ${e.course.title}`} className="shrink-0 rounded-full bg-ca-gold text-ca-bg px-4 py-1.5 text-sm font-medium hover:bg-[#ffd47a]">Continue</Link>
                   </li>
                 ))}
               </ul>
