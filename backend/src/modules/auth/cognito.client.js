@@ -11,7 +11,8 @@ import {
 } from '@aws-sdk/client-cognito-identity-provider'
 import { env } from '../../config/env.js'
 
-const client = new CognitoIdentityProviderClient({ region: env.COGNITO_REGION })
+// maxAttempts: transparently retry transient network resets/timeouts (seen on slow links) before we surface a 503.
+const client = new CognitoIdentityProviderClient({ region: env.COGNITO_REGION, maxAttempts: 4 })
 const ClientId = env.COGNITO_APP_CLIENT_ID
 
 export const cognito = {
