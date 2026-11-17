@@ -2,8 +2,6 @@
 
 **Where Cloud Engineering Becomes Art.** — a free cloud-learning platform (AWS first, then Azure & DevOps) with hands-on labs and cloud deployment services.
 
-Live (marketing site): https://main.d3ag7vu427q7y9.amplifyapp.com/
-
 ## Monorepo
 
 | Path | What |
