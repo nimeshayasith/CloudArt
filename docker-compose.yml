@@ -1,0 +1,21 @@
+# Local development database only.   docker compose up -d
+services:
+  db:
+    image: postgres:16-alpine
+    container_name: cloudart-db
+    restart: unless-stopped
+    environment:
+      POSTGRES_USER: cloudart
+      POSTGRES_PASSWORD: cloudart_dev_password
+      POSTGRES_DB: cloudart_db
+    ports:
+      - "5433:5432"
+    volumes:
+      - cloudart_pgdata:/var/lib/postgresql/data
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U cloudart -d cloudart_db"]
+      interval: 5s
+      timeout: 3s
+      retries: 10
+volumes:
+  cloudart_pgdata:

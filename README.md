@@ -1,21 +1,33 @@
 # CloudArt
 
-**Where Cloud Engineering Becomes Art.** — the CloudArt business platform: an architecture-led cloud / AWS / DevOps studio site and business plan.
+**Where Cloud Engineering Becomes Art.** — a free cloud-learning platform (AWS first, then Azure & DevOps) with hands-on labs and cloud deployment services.
 
-Live: https://main.d3ag7vu427q7y9.amplifyapp.com/
+Live (marketing site): https://main.d3ag7vu427q7y9.amplifyapp.com/
 
-## Stack
-React 19 · Vite · Tailwind CSS 3 · deployed with AWS Amplify Hosting (auto-deploys from `main`).
+## Monorepo
 
-## Develop
+| Path | What |
+| --- | --- |
+| `frontend/` | React 19 + Vite + Tailwind (public site; app screens come next) |
+| `backend/` | Node.js + Express API (modular monolith) + Prisma + PostgreSQL |
+| `docs/` | `architecture.md`, `database-design.md` |
+| `docker-compose.yml` | Local PostgreSQL |
+| `amplify.yml` | Amplify build spec (builds `frontend/`) |
+
+## Run locally
+
 ```bash
+docker compose up -d                          # PostgreSQL on :5433
+
+cd backend
+cp .env.example .env
 npm install
-npm run dev      # local dev server
-npm run lint     # oxlint
-npm run build    # production build → dist/
+npx prisma migrate dev && npm run db:seed
+npm run dev                                   # API on :4000
+npm test
+
+cd ../frontend
+npm install && npm run dev                    # site on :5173
 ```
 
-## Structure
-- `src/content/site.js` — **all copy** (hero, services, business model, roadmap). Edit the business plan here.
-- `src/components/` — `Hero`, `Services`, `ArchitectureReveal`, `BusinessModel`, `Roadmap`, `Contact`, `Navigation`.
-- `amplify.yml` — Amplify build spec.
+See [docs/architecture.md](docs/architecture.md) and [docs/database-design.md](docs/database-design.md).

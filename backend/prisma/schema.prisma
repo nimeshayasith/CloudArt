@@ -1,0 +1,586 @@
+// CloudArt — PostgreSQL schema (cloudart_db)
+// Modules: Identity · Learning · Progress · Assessments · Labs · Services
+// Conventions: UUID PKs, snake_case tables/columns via @map/@@map, TIMESTAMPTZ dates,
+// emails/usernames are stored lower-cased by the API (case-insensitive uniqueness).
+
+generator client {
+  provider = "prisma-client-js"
+}
+
+datasource db {
+  provider = "postgresql"
+}
+
+// ───────────────────────────── Enums ─────────────────────────────
+
+enum SystemRole {
+  STUDENT
+  ADMIN
+}
+
+enum ProfessionalCategory {
+  STUDENT
+  SOFTWARE_ENGINEER
+  CLOUD_ENGINEER
+  DEVOPS_ENGINEER
+  SOLUTIONS_ARCHITECT
+  SRE
+  OTHER
+}
+
+enum ContentStatus {
+  DRAFT
+  PUBLISHED
+  ARCHIVED
+}
+
+enum Difficulty {
+  BEGINNER
+  INTERMEDIATE
+  ADVANCED
+}
+
+enum EnrollmentStatus {
+  ACTIVE
+  COMPLETED
+  DROPPED
+}
+
+enum ResourceType {
+  NOTE
+  PDF
+  DIAGRAM
+  LINK
+  THEORY_VIDEO
+  HANDS_ON_VIDEO
+  OTHER
+}
+
+enum QuizType {
+  MODULE_QUIZ
+  FINAL_EXAM
+}
+
+enum QuestionType {
+  SINGLE_CHOICE
+  MULTIPLE_SELECT
+  TRUE_FALSE
+}
+
+enum AttemptStatus {
+  IN_PROGRESS
+  SUBMITTED
+  EXPIRED
+}
+
+enum ServiceRequestStatus {
+  SUBMITTED
+  UNDER_REVIEW
+  PROPOSAL_SENT
+  ACCEPTED
+  REJECTED
+  CANCELLED
+}
+
+enum ProposalStatus {
+  DRAFT
+  SENT
+  ACCEPTED
+  REJECTED
+}
+
+enum ProjectStatus {
+  PLANNED
+  IN_PROGRESS
+  ON_HOLD
+  COMPLETED
+  CANCELLED
+}
+
+enum MilestoneStatus {
+  PENDING
+  IN_PROGRESS
+  DONE
+}
+
+// ───────────────────────── 01 · Identity ─────────────────────────
+
+model Organization {
+  id               String   @id @default(dbgenerated("gen_random_uuid()")) @db.Uuid
+  name             String   @unique @db.VarChar(200)
+  organizationType String?  @map("organization_type") @db.VarChar(50)
+  website          String?
+  createdAt        DateTime @default(now()) @map("created_at") @db.Timestamptz(6)
+
+  users User[]
+
+  @@map("organizations")
+}
+
+model User {
+  id                   String               @id @default(dbgenerated("gen_random_uuid()")) @db.Uuid
+  cognitoSub           String               @unique @map("cognito_sub") @db.VarChar(255)
+  fullName             String               @map("full_name") @db.VarChar(150)
+  username             String               @unique @db.VarChar(50)
+  email                String               @unique @db.VarChar(255)
+  organizationId       String?              @map("organization_id") @db.Uuid
+  professionalCategory ProfessionalCategory @default(STUDENT) @map("professional_category")
+  systemRole           SystemRole           @default(STUDENT) @map("system_role")
+  isActive             Boolean              @default(true) @map("is_active")
+  createdAt            DateTime             @default(now()) @map("created_at") @db.Timestamptz(6)
+  updatedAt            DateTime             @updatedAt @map("updated_at") @db.Timestamptz(6)
+
+  organization    Organization?    @relation(fields: [organizationId], references: [id], onDelete: SetNull)
+  enrollments     Enrollment[]
+  labEnrollments  LabEnrollment[]
+  serviceRequests ServiceRequest[]
+  coursesCreated  Course[]
+  labsCreated     Lab[]
+
+  @@index([organizationId])
+  @@map("users")
+}
+
+// ───────────────────────── 02 · Learning ─────────────────────────
+
+model CourseCategory {
+  id        String   @id @default(dbgenerated("gen_random_uuid()")) @db.Uuid
+  name      String   @unique @db.VarChar(100)
+  slug      String   @unique @db.VarChar(120)
+  sortOrder Int      @default(0) @map("sort_order")
+  createdAt DateTime @default(now()) @map("created_at") @db.Timestamptz(6)
+
+  courses Course[]
+
+  @@map("course_categories")
+}
+
+model Course {
+  id           String        @id @default(dbgenerated("gen_random_uuid()")) @db.Uuid
+  title        String        @db.VarChar(200)
+  slug         String        @unique @db.VarChar(220)
+  description  String        @default("")
+  categoryId   String        @map("category_id") @db.Uuid
+  difficulty   Difficulty    @default(BEGINNER)
+  thumbnailKey String?       @map("thumbnail_key")
+  isFree       Boolean       @default(true) @map("is_free")
+  status       ContentStatus @default(DRAFT)
+  createdById  String        @map("created_by") @db.Uuid
+  createdAt    DateTime      @default(now()) @map("created_at") @db.Timestamptz(6)
+  updatedAt    DateTime      @updatedAt @map("updated_at") @db.Timestamptz(6)
+
+  category    CourseCategory @relation(fields: [categoryId], references: [id], onDelete: Restrict)
+  createdBy   User           @relation(fields: [createdById], references: [id], onDelete: Restrict)
+  modules     CourseModule[]
+  enrollments Enrollment[]
+  quizzes     Quiz[]
+  examPolicy  ExamPolicy?
+
+  @@index([categoryId])
+  @@index([status])
+  @@map("courses")
+}
+
+model CourseModule {
+  id          String   @id @default(dbgenerated("gen_random_uuid()")) @db.Uuid
+  courseId    String   @map("course_id") @db.Uuid
+  title       String   @db.VarChar(200)
+  description String   @default("")
+  sortOrder   Int      @default(0) @map("sort_order")
+  isPublished Boolean  @default(false) @map("is_published")
+  createdAt   DateTime @default(now()) @map("created_at") @db.Timestamptz(6)
+
+  course  Course   @relation(fields: [courseId], references: [id], onDelete: Cascade)
+  lessons Lesson[]
+  quizzes Quiz[]
+
+  @@index([courseId, sortOrder])
+  @@map("course_modules")
+}
+
+model Lesson {
+  id              String   @id @default(dbgenerated("gen_random_uuid()")) @db.Uuid
+  moduleId        String   @map("module_id") @db.Uuid
+  title           String   @db.VarChar(200)
+  description     String   @default("")
+  youtubeVideoId  String   @map("youtube_video_id") @db.VarChar(100)
+  durationSeconds Int      @default(0) @map("duration_seconds")
+  sortOrder       Int      @default(0) @map("sort_order")
+  isPreview       Boolean  @default(false) @map("is_preview")
+  isPublished     Boolean  @default(false) @map("is_published")
+  createdAt       DateTime @default(now()) @map("created_at") @db.Timestamptz(6)
+  updatedAt       DateTime @updatedAt @map("updated_at") @db.Timestamptz(6)
+
+  module    CourseModule     @relation(fields: [moduleId], references: [id], onDelete: Cascade)
+  resources LessonResource[]
+  progress  LessonProgress[]
+
+  @@index([moduleId, sortOrder])
+  @@map("lessons")
+}
+
+/// Notes (inline `content`), PDFs/diagrams (S3 key) and external links attached to a lesson.
+model LessonResource {
+  id            String       @id @default(dbgenerated("gen_random_uuid()")) @db.Uuid
+  lessonId      String       @map("lesson_id") @db.Uuid
+  title         String       @db.VarChar(200)
+  resourceType  ResourceType @map("resource_type")
+  content       String?
+  s3ObjectKey   String?      @map("s3_object_key")
+  externalUrl   String?      @map("external_url")
+  sortOrder     Int          @default(0) @map("sort_order")
+
+  lesson Lesson @relation(fields: [lessonId], references: [id], onDelete: Cascade)
+
+  @@index([lessonId])
+  @@map("lesson_resources")
+}
+
+// ───────────────────────── 03 · Progress ─────────────────────────
+
+model Enrollment {
+  id         String           @id @default(dbgenerated("gen_random_uuid()")) @db.Uuid
+  userId     String           @map("user_id") @db.Uuid
+  courseId   String           @map("course_id") @db.Uuid
+  status     EnrollmentStatus @default(ACTIVE)
+  enrolledAt DateTime         @default(now()) @map("enrolled_at") @db.Timestamptz(6)
+
+  user           User             @relation(fields: [userId], references: [id], onDelete: Restrict)
+  course         Course           @relation(fields: [courseId], references: [id], onDelete: Restrict)
+  lessonProgress LessonProgress[]
+  quizAttempts   QuizAttempt[]
+
+  @@unique([userId, courseId])
+  @@index([userId])
+  @@index([courseId])
+  @@map("enrollments")
+}
+
+model LessonProgress {
+  id                  String    @id @default(dbgenerated("gen_random_uuid()")) @db.Uuid
+  enrollmentId        String    @map("enrollment_id") @db.Uuid
+  lessonId            String    @map("lesson_id") @db.Uuid
+  lastPositionSeconds Int       @default(0) @map("last_position_seconds")
+  /// Furthest point reached; completion is derived server-side from this vs. the policy threshold.
+  maxPositionSeconds  Int       @default(0) @map("max_position_seconds")
+  completed           Boolean   @default(false)
+  lastWatchedAt       DateTime  @default(now()) @map("last_watched_at") @db.Timestamptz(6)
+  completedAt         DateTime? @map("completed_at") @db.Timestamptz(6)
+
+  enrollment Enrollment @relation(fields: [enrollmentId], references: [id], onDelete: Cascade)
+  lesson     Lesson     @relation(fields: [lessonId], references: [id], onDelete: Cascade)
+
+  @@unique([enrollmentId, lessonId])
+  @@index([lessonId])
+  @@map("lesson_progress")
+}
+
+// ─────────────────────── 04 · Assessments ────────────────────────
+
+/// Per-course rules for unlocking the final exam (admin-configurable).
+model ExamPolicy {
+  id                       String  @id @default(dbgenerated("gen_random_uuid()")) @db.Uuid
+  courseId                 String  @unique @map("course_id") @db.Uuid
+  requireAllLessons        Boolean @default(true) @map("require_all_lessons")
+  lessonWatchThresholdPct  Int     @default(90) @map("lesson_watch_threshold_pct")
+  requireModuleQuizzes     Boolean @default(true) @map("require_module_quizzes")
+
+  course Course @relation(fields: [courseId], references: [id], onDelete: Cascade)
+
+  @@map("exam_policies")
+}
+
+model Quiz {
+  id              String        @id @default(dbgenerated("gen_random_uuid()")) @db.Uuid
+  courseId        String        @map("course_id") @db.Uuid
+  moduleId        String?       @map("module_id") @db.Uuid // NULL for FINAL_EXAM
+  title           String        @db.VarChar(200)
+  description     String        @default("")
+  quizType        QuizType      @map("quiz_type")
+  /// Number of questions drawn from the bank per attempt (e.g. 65 for a final exam).
+  totalQuestions  Int           @map("total_questions")
+  durationMinutes Int?          @map("duration_minutes")
+  passPercentage  Decimal       @default(70) @map("pass_percentage") @db.Decimal(5, 2)
+  maxAttempts     Int?          @map("max_attempts")
+  shuffleQuestions Boolean      @default(true) @map("shuffle_questions")
+  status          ContentStatus @default(DRAFT)
+  createdAt       DateTime      @default(now()) @map("created_at") @db.Timestamptz(6)
+  updatedAt       DateTime      @updatedAt @map("updated_at") @db.Timestamptz(6)
+
+  course    Course        @relation(fields: [courseId], references: [id], onDelete: Cascade)
+  module    CourseModule? @relation(fields: [moduleId], references: [id], onDelete: SetNull)
+  questions Question[]
+  attempts  QuizAttempt[]
+
+  @@index([courseId, quizType])
+  @@index([moduleId])
+  @@map("quizzes")
+}
+
+model Question {
+  id           String       @id @default(dbgenerated("gen_random_uuid()")) @db.Uuid
+  quizId       String       @map("quiz_id") @db.Uuid
+  questionText String       @map("question_text")
+  questionType QuestionType @map("question_type")
+  explanation  String?
+  marks        Decimal      @default(1) @db.Decimal(6, 2)
+  sortOrder    Int          @default(0) @map("sort_order")
+  isActive     Boolean      @default(true) @map("is_active")
+
+  quiz            Quiz              @relation(fields: [quizId], references: [id], onDelete: Cascade)
+  options         QuestionOption[]
+  attemptQuestions AttemptQuestion[]
+  answers         AttemptAnswer[]
+
+  @@index([quizId])
+  @@map("questions")
+}
+
+model QuestionOption {
+  id         String  @id @default(dbgenerated("gen_random_uuid()")) @db.Uuid
+  questionId String  @map("question_id") @db.Uuid
+  optionText String  @map("option_text")
+  /// Never serialise to students before submission.
+  isCorrect  Boolean @default(false) @map("is_correct")
+  sortOrder  Int     @default(0) @map("sort_order")
+
+  question Question @relation(fields: [questionId], references: [id], onDelete: Cascade)
+
+  @@index([questionId])
+  @@map("question_options")
+}
+
+model QuizAttempt {
+  id            String        @id @default(dbgenerated("gen_random_uuid()")) @db.Uuid
+  quizId        String        @map("quiz_id") @db.Uuid
+  enrollmentId  String        @map("enrollment_id") @db.Uuid
+  attemptNumber Int           @map("attempt_number")
+  status        AttemptStatus @default(IN_PROGRESS)
+  startedAt     DateTime      @default(now()) @map("started_at") @db.Timestamptz(6)
+  expiresAt     DateTime?     @map("expires_at") @db.Timestamptz(6)
+  submittedAt   DateTime?     @map("submitted_at") @db.Timestamptz(6)
+  score         Decimal?      @db.Decimal(7, 2)
+  percentage    Decimal?      @db.Decimal(5, 2)
+  passed        Boolean?
+
+  quiz       Quiz              @relation(fields: [quizId], references: [id], onDelete: Restrict)
+  enrollment Enrollment        @relation(fields: [enrollmentId], references: [id], onDelete: Cascade)
+  questions  AttemptQuestion[]
+  answers    AttemptAnswer[]
+
+  @@unique([quizId, enrollmentId, attemptNumber])
+  @@index([enrollmentId])
+  @@map("quiz_attempts")
+}
+
+/// Snapshot of which questions (and in what order) an attempt received.
+model AttemptQuestion {
+  attemptId  String @map("attempt_id") @db.Uuid
+  questionId String @map("question_id") @db.Uuid
+  position   Int
+
+  attempt  QuizAttempt @relation(fields: [attemptId], references: [id], onDelete: Cascade)
+  question Question    @relation(fields: [questionId], references: [id], onDelete: Restrict)
+
+  @@id([attemptId, questionId])
+  @@map("attempt_questions")
+}
+
+model AttemptAnswer {
+  id                String   @id @default(dbgenerated("gen_random_uuid()")) @db.Uuid
+  attemptId         String   @map("attempt_id") @db.Uuid
+  questionId        String   @map("question_id") @db.Uuid
+  selectedOptionIds Json     @default("[]") @map("selected_option_ids")
+  awardedMarks      Decimal? @map("awarded_marks") @db.Decimal(6, 2)
+
+  attempt  QuizAttempt @relation(fields: [attemptId], references: [id], onDelete: Cascade)
+  question Question    @relation(fields: [questionId], references: [id], onDelete: Restrict)
+
+  @@unique([attemptId, questionId])
+  @@map("attempt_answers")
+}
+
+// ──────────────────── 05 · CloudArt Labs (hands-on) ────────────────────
+
+model Lab {
+  id               String        @id @default(dbgenerated("gen_random_uuid()")) @db.Uuid
+  title            String        @db.VarChar(200)
+  slug             String        @unique @db.VarChar(220)
+  description      String        @default("")
+  difficulty       Difficulty    @default(BEGINNER)
+  prerequisites    String?
+  estimatedMinutes Int?          @map("estimated_minutes")
+  status           ContentStatus @default(DRAFT)
+  createdById      String        @map("created_by") @db.Uuid
+  createdAt        DateTime      @default(now()) @map("created_at") @db.Timestamptz(6)
+  updatedAt        DateTime      @updatedAt @map("updated_at") @db.Timestamptz(6)
+
+  createdBy   User            @relation(fields: [createdById], references: [id], onDelete: Restrict)
+  steps       LabStep[]
+  resources   LabResource[]
+  enrollments LabEnrollment[]
+
+  @@index([status])
+  @@map("labs")
+}
+
+model LabStep {
+  id           String  @id @default(dbgenerated("gen_random_uuid()")) @db.Uuid
+  labId        String  @map("lab_id") @db.Uuid
+  title        String  @db.VarChar(200)
+  instructions String  @default("")
+  sortOrder    Int     @default(0) @map("sort_order")
+  isRequired   Boolean @default(true) @map("is_required")
+
+  lab       Lab               @relation(fields: [labId], references: [id], onDelete: Cascade)
+  resources LabResource[]
+  progress  LabStepProgress[]
+
+  @@index([labId, sortOrder])
+  @@map("lab_steps")
+}
+
+/// Theory videos, the hands-on video, diagrams and links for a lab (or one of its steps).
+model LabResource {
+  id             String       @id @default(dbgenerated("gen_random_uuid()")) @db.Uuid
+  labId          String       @map("lab_id") @db.Uuid
+  stepId         String?      @map("step_id") @db.Uuid
+  resourceType   ResourceType @map("resource_type")
+  title          String       @db.VarChar(200)
+  youtubeVideoId String?      @map("youtube_video_id") @db.VarChar(100)
+  s3ObjectKey    String?      @map("s3_object_key")
+  externalUrl    String?      @map("external_url")
+  sortOrder      Int          @default(0) @map("sort_order")
+
+  lab  Lab      @relation(fields: [labId], references: [id], onDelete: Cascade)
+  step LabStep? @relation(fields: [stepId], references: [id], onDelete: SetNull)
+
+  @@index([labId])
+  @@map("lab_resources")
+}
+
+model LabEnrollment {
+  id          String           @id @default(dbgenerated("gen_random_uuid()")) @db.Uuid
+  userId      String           @map("user_id") @db.Uuid
+  labId       String           @map("lab_id") @db.Uuid
+  status      EnrollmentStatus @default(ACTIVE)
+  enrolledAt  DateTime         @default(now()) @map("enrolled_at") @db.Timestamptz(6)
+  completedAt DateTime?        @map("completed_at") @db.Timestamptz(6)
+
+  user         User              @relation(fields: [userId], references: [id], onDelete: Restrict)
+  lab          Lab               @relation(fields: [labId], references: [id], onDelete: Restrict)
+  stepProgress LabStepProgress[]
+
+  @@unique([userId, labId])
+  @@index([labId])
+  @@map("lab_enrollments")
+}
+
+model LabStepProgress {
+  id              String    @id @default(dbgenerated("gen_random_uuid()")) @db.Uuid
+  labEnrollmentId String    @map("lab_enrollment_id") @db.Uuid
+  labStepId       String    @map("lab_step_id") @db.Uuid
+  completed       Boolean   @default(false)
+  completedAt     DateTime? @map("completed_at") @db.Timestamptz(6)
+
+  labEnrollment LabEnrollment @relation(fields: [labEnrollmentId], references: [id], onDelete: Cascade)
+  labStep       LabStep       @relation(fields: [labStepId], references: [id], onDelete: Cascade)
+
+  @@unique([labEnrollmentId, labStepId])
+  @@map("lab_step_progress")
+}
+
+// ───────────────────── 06 · Deployment services ──────────────────────
+
+model ServiceCategory {
+  id        String   @id @default(dbgenerated("gen_random_uuid()")) @db.Uuid
+  name      String   @unique @db.VarChar(120)
+  slug      String   @unique @db.VarChar(140)
+  sortOrder Int      @default(0) @map("sort_order")
+  createdAt DateTime @default(now()) @map("created_at") @db.Timestamptz(6)
+
+  requests ServiceRequest[]
+
+  @@map("service_categories")
+}
+
+model ServiceRequest {
+  id                String               @id @default(dbgenerated("gen_random_uuid()")) @db.Uuid
+  userId            String               @map("user_id") @db.Uuid
+  categoryId        String               @map("category_id") @db.Uuid
+  title             String               @db.VarChar(200)
+  description       String
+  cloudProvider     String?              @map("cloud_provider") @db.VarChar(30)
+  budgetRange       String?              @map("budget_range") @db.VarChar(100)
+  requestedDeadline DateTime?            @map("requested_deadline") @db.Date
+  status            ServiceRequestStatus @default(SUBMITTED)
+  createdAt         DateTime             @default(now()) @map("created_at") @db.Timestamptz(6)
+  updatedAt         DateTime             @updatedAt @map("updated_at") @db.Timestamptz(6)
+
+  user        User                       @relation(fields: [userId], references: [id], onDelete: Restrict)
+  category    ServiceCategory            @relation(fields: [categoryId], references: [id], onDelete: Restrict)
+  attachments ServiceRequestAttachment[]
+  proposals   ServiceProposal[]
+  project     ServiceProject?
+
+  @@index([status])
+  @@index([userId])
+  @@map("service_requests")
+}
+
+model ServiceRequestAttachment {
+  id               String   @id @default(dbgenerated("gen_random_uuid()")) @db.Uuid
+  serviceRequestId String   @map("service_request_id") @db.Uuid
+  fileName         String   @map("file_name") @db.VarChar(255)
+  s3ObjectKey      String   @map("s3_object_key")
+  uploadedAt       DateTime @default(now()) @map("uploaded_at") @db.Timestamptz(6)
+
+  serviceRequest ServiceRequest @relation(fields: [serviceRequestId], references: [id], onDelete: Cascade)
+
+  @@index([serviceRequestId])
+  @@map("service_request_attachments")
+}
+
+model ServiceProposal {
+  id                    String         @id @default(dbgenerated("gen_random_uuid()")) @db.Uuid
+  serviceRequestId      String         @map("service_request_id") @db.Uuid
+  proposalDescription   String         @map("proposal_description")
+  estimatedCost         Decimal?       @map("estimated_cost") @db.Decimal(12, 2)
+  estimatedDurationDays Int?           @map("estimated_duration_days")
+  status                ProposalStatus @default(DRAFT)
+  createdAt             DateTime       @default(now()) @map("created_at") @db.Timestamptz(6)
+
+  serviceRequest ServiceRequest @relation(fields: [serviceRequestId], references: [id], onDelete: Cascade)
+
+  @@index([serviceRequestId])
+  @@map("service_proposals")
+}
+
+model ServiceProject {
+  id               String        @id @default(dbgenerated("gen_random_uuid()")) @db.Uuid
+  serviceRequestId String        @unique @map("service_request_id") @db.Uuid
+  projectName      String        @map("project_name") @db.VarChar(200)
+  status           ProjectStatus @default(PLANNED)
+  startedAt        DateTime?     @map("started_at") @db.Timestamptz(6)
+  completedAt      DateTime?     @map("completed_at") @db.Timestamptz(6)
+
+  serviceRequest ServiceRequest    @relation(fields: [serviceRequestId], references: [id], onDelete: Restrict)
+  milestones     ProjectMilestone[]
+
+  @@map("service_projects")
+}
+
+model ProjectMilestone {
+  id               String          @id @default(dbgenerated("gen_random_uuid()")) @db.Uuid
+  serviceProjectId String          @map("service_project_id") @db.Uuid
+  title            String          @db.VarChar(200)
+  description      String          @default("")
+  status           MilestoneStatus @default(PENDING)
+  dueDate          DateTime?       @map("due_date") @db.Date
+  completedAt      DateTime?       @map("completed_at") @db.Timestamptz(6)
+
+  serviceProject ServiceProject @relation(fields: [serviceProjectId], references: [id], onDelete: Cascade)
+
+  @@index([serviceProjectId])
+  @@map("project_milestones")
+}
