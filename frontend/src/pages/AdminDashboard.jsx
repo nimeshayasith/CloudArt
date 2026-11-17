@@ -1,4 +1,5 @@
 import { useEffect, useState } from 'react'
+import { Link } from 'react-router-dom'
 import AppShell, { LoadError, Loading, Panel, StatCard } from '../components/AppShell'
 import { inputClass } from '../components/AuthLayout'
 import { authedApi } from '../lib/api'
@@ -26,7 +27,9 @@ function Stats() {
       <div className="grid grid-cols-2 lg:grid-cols-4 gap-3 sm:gap-4">
         <StatCard label="Students" value={s.users.students} hint={`${s.users.newThisWeek} new this week`} />
         <StatCard label="Organizations" value={s.organizations} />
-        <StatCard label="Courses" value={s.courses.published} hint={`${s.courses.draft} draft`} />
+        <Link to="/admin/courses" aria-label="Courses — manage courses" className="block rounded-2xl focus:outline-none focus-visible:ring-2 focus-visible:ring-ca-gold">
+          <StatCard label="Courses" value={s.courses.published} hint={`${s.courses.draft} draft · manage →`} />
+        </Link>
         <StatCard label="Enrollments" value={s.enrollments.active + s.enrollments.completed} hint={`${s.enrollments.completed} completed`} />
       </div>
       <Panel title="Recent sign-ups">

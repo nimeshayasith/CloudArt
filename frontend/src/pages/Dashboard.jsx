@@ -53,7 +53,7 @@ export default function Dashboard() {
                 {data.enrollments.map((e) => (
                   <li key={e.id} className="py-3 flex items-center justify-between gap-3">
                     <div className="min-w-0">
-                      <p className="text-ca-text font-medium truncate">{e.course.title}</p>
+                      <Link to={`/courses/${e.course.slug}`} className="block text-ca-text font-medium truncate hover:text-ca-gold">{e.course.title}</Link>
                       <CourseMeta course={e.course} />
                     </div>
                     <span className={`shrink-0 text-xs border rounded-full px-2.5 py-0.5 ${STATUS_STYLE[e.status] ?? 'text-ca-muted border-white/20'}`}>{pretty(e.status)}</span>
@@ -69,10 +69,12 @@ export default function Dashboard() {
             ) : (
               <ul className="grid sm:grid-cols-2 gap-3">
                 {data.explore.map((c) => (
-                  <li key={c.id} className="rounded-xl border border-white/10 p-4">
-                    <p className="text-ca-text font-medium">{c.title}</p>
-                    <CourseMeta course={c} />
-                    {c.description && <p className="mt-2 text-sm text-ca-muted line-clamp-2">{c.description}</p>}
+                  <li key={c.id}>
+                    <Link to={`/courses/${c.slug}`} className="block h-full rounded-xl border border-white/10 p-4 hover:border-ca-gold/50 transition">
+                      <p className="text-ca-text font-medium">{c.title}</p>
+                      <CourseMeta course={c} />
+                      {c.description && <p className="mt-2 text-sm text-ca-muted line-clamp-2">{c.description}</p>}
+                    </Link>
                   </li>
                 ))}
               </ul>

@@ -37,6 +37,7 @@ export default function Navigation() {
           {nav.map(l => (
             <a key={l.href} href={l.href} className="hover:text-ca-gold transition-colors">{l.label}</a>
           ))}
+          <Link to="/courses" className="hover:text-ca-gold transition-colors">Courses</Link>
           <Link to="/login" className="hover:text-ca-gold transition-colors">Log in</Link>
           <Link
             to="/register"
@@ -67,6 +68,7 @@ export default function Navigation() {
               {l.label}
             </a>
           ))}
+          <Link to="/courses" className="py-3 text-ca-text border-b border-white/5 hover:text-ca-gold">Courses</Link>
           <Link to="/login" className="py-3 text-ca-text border-b border-white/5 hover:text-ca-gold">Log in</Link>
           <Link to="/register" className="mt-4 text-center font-semibold py-3 rounded-full bg-ca-gold text-ca-bg">Sign up</Link>
         </div>
