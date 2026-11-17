@@ -17,6 +17,55 @@ export function toPublicUser(u) {
   }
 }
 
+/** Update the caller's own profile (name, organization, professional category). */
+export async function updateProfile(userId, input) {
+  const data = {}
+  if (input.fullName !== undefined) data.fullName = input.fullName
+  if (input.professionalCategory !== undefined) data.professionalCategory = input.professionalCategory
+  if (input.organization !== undefined) {
+    const org = await findOrCreateOrganization(input.organization)
+    data.organizationId = org?.id ?? null
+  }
+  return prisma.user.update({ where: { id: userId }, data, include: userInclude })
+}
+
+/** Student dashboard summary: real enrollment counts + published courses to explore. */
+export async function studentDashboard(userId) {
+  const [enrollments, explore] = await Promise.all([
+    prisma.enrollment.findMany({
+      where: { userId, status: { not: 'DROPPED' } },
+      orderBy: { enrolledAt: 'desc' },
+      select: {
+        id: true,
+        status: true,
+        enrolledAt: true,
+        course: { select: { id: true, title: true, slug: true, difficulty: true, category: { select: { name: true } } } },
+      },
+    }),
+    prisma.course.findMany({
+      where: { status: 'PUBLISHED', enrollments: { none: { userId } } },
+      orderBy: { createdAt: 'desc' },
+      take: 6,
+      select: { id: true, title: true, slug: true, description: true, difficulty: true, category: { select: { name: true } } },
+    }),
+  ])
+
+  return {
+    counts: {
+      enrolled: enrollments.length,
+      inProgress: enrollments.filter((e) => e.status === 'ACTIVE').length,
+      completed: enrollments.filter((e) => e.status === 'COMPLETED').length,
+    },
+    enrollments: enrollments.map((e) => ({
+      id: e.id,
+      status: e.status,
+      enrolledAt: e.enrolledAt,
+      course: { id: e.course.id, title: e.course.title, slug: e.course.slug, difficulty: e.course.difficulty, category: e.course.category.name },
+    })),
+    explore: explore.map((c) => ({ id: c.id, title: c.title, slug: c.slug, description: c.description, difficulty: c.difficulty, category: c.category.name })),
+  }
+}
+
 async function findOrCreateOrganization(name) {
   const trimmed = name?.trim()
   if (!trimmed) return null

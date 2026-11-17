@@ -1,12 +1,6 @@
-import { execFileSync } from 'node:child_process'
 import { expect, test } from '@playwright/test'
+import { PASSWORD, aws, sql } from './helpers.js'
 
-const POOL = process.env.COGNITO_USER_POOL_ID ?? 'ap-south-1_KXQljZJGU'
-const REGION = process.env.COGNITO_REGION ?? 'ap-south-1'
-const aws = (...args) => execFileSync('aws', ['cognito-idp', ...args, '--region', REGION, '--user-pool-id', POOL], { stdio: 'pipe' }).toString()
-const sql = (q) => execFileSync('docker', ['exec', 'cloudart-db', 'psql', '-U', 'cloudart', '-d', 'cloudart_db', '-c', q], { stdio: 'pipe' })
-
-const PASSWORD = 'Str0ng!Pass#1'
 const created = []
 
 test.afterAll(() => {
@@ -112,9 +106,11 @@ test.describe('full journey against real Cognito', () => {
     await page.getByRole('button', { name: 'Log in' }).click()
     await expect(page).toHaveURL(/\/dashboard/)
     await expect(page.getByRole('heading', { name: /Welcome, Browser Tester/ })).toBeVisible()
-    await expect(page.getByText(username)).toBeVisible()
-    await expect(page.getByText('E2E Browser University')).toBeVisible()
-    await expect(page.getByText('STUDENT', { exact: true })).toBeVisible() // access level — never ADMIN from registration
+    await expect(page.getByText('E2E Browser University').first()).toBeVisible()
+    await expect(page.getByRole('link', { name: 'Admin', exact: true })).toHaveCount(0) // registration never yields admin rights
+    await page.getByRole('link', { name: 'Profile' }).click()
+    await expect(page.getByLabel('Username')).toHaveValue(username)
+    await page.getByRole('link', { name: 'My learning' }).click()
 
     // Session survives a reload
     await page.reload()

@@ -144,5 +144,14 @@ describe('upstream failures', () => {
     const res = await request(app).post('/api/v1/auth/login').send({ email: 'a@test.local', password: 'Str0ng!Pass' })
     expect(res.status).toBe(503)
     expect(res.body.error.code).toBe('SERVICE_UNAVAILABLE')
+    expect(res.body.error.message).toMatch(/try again/i) // the user sees guidance, not "Something went wrong"
+  })
+
+  it('still hides the details of unexpected 500s', async () => {
+    cognito.login.mockRejectedValue(new Error('secret internal detail'))
+    const res = await request(app).post('/api/v1/auth/login').send({ email: 'a@test.local', password: 'Str0ng!Pass' })
+    expect(res.status).toBe(500)
+    expect(res.body.error.message).toBe('Something went wrong')
+    expect(JSON.stringify(res.body)).not.toContain('secret')
   })
 })

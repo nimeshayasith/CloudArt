@@ -46,6 +46,23 @@ Modules share the database but not business logic.
 6. **Archive, don't delete** content that has enrollments or history.
 7. **Transactions** for exam submission and enrollment creation.
 
+## API (v1, `/api/v1`)
+
+| Method & path | Access | Purpose |
+| --- | --- | --- |
+| `POST /auth/register` `/confirm` `/resend-code` `/login` `/refresh` | public (rate-limited) | Cognito sign-up, email verification, tokens |
+| `GET /users/me` | signed in | Current profile (role comes from PostgreSQL) |
+| `PATCH /users/me` | signed in | Update `fullName`, `organization`, `professionalCategory` only; any other field is rejected (400) |
+| `GET /users/me/dashboard` | signed in | Enrollment counts, own enrollments, published courses not yet enrolled |
+| `GET /admin/stats` | admin | Real counts: users, new this week, organizations, courses, enrollments, recent sign-ups |
+| `GET /admin/users?q=&page=&pageSize=` | admin | Searchable, paginated user list (`pageSize` ≤ 50) |
+| `PATCH /admin/users/:id/status` | admin | Enable/disable a student. Admins and yourself cannot be disabled |
+
+A disabled user is locked out immediately: the next API call returns `403 ACCOUNT_DISABLED`,
+and the login screen shows the message without keeping a session.
+
+Course progress percentages arrive with enrollment/player work (Phase 5); Phase 3 shows only counts that already exist.
+
 ## Environments
 
 - Local: Docker Compose PostgreSQL (`docker-compose.yml`), `backend/.env`.
@@ -53,9 +70,9 @@ Modules share the database but not business logic.
 
 ## Roadmap
 
-1. Repo, React, Express, PostgreSQL, Prisma  ← **this phase**
-2. Cognito: register, verify email, login, profiles
-3. Student/admin dashboards
+1. Repo, React, Express, PostgreSQL, Prisma — done
+2. Cognito: register, verify email, login, profiles — done
+3. Student/admin dashboards  ← **this phase**
 4. Categories, courses, modules, lessons
 5. Enrollment, YouTube player, resume-where-you-left-off
 6. Module quizzes + question management (+ Excel import/export)

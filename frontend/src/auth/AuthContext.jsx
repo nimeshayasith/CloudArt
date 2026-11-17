@@ -21,9 +21,14 @@ export function AuthProvider({ children }) {
   const login = useCallback(async (email, password) => {
     const tokens = await api('/auth/login', { method: 'POST', body: { email, password } })
     tokenStore.set(tokens)
-    const d = await authedApi('/users/me')
-    setUser(d.user)
-    return d.user
+    try {
+      const d = await authedApi('/users/me')
+      setUser(d.user)
+      return d.user
+    } catch (err) {
+      tokenStore.clear() // e.g. disabled account: do not keep a half-signed-in session
+      throw err
+    }
   }, [])
 
   const logout = useCallback(() => {
@@ -31,7 +36,7 @@ export function AuthProvider({ children }) {
     setUser(null)
   }, [])
 
-  const value = useMemo(() => ({ user, loading, login, logout }), [user, loading, login, logout])
+  const value = useMemo(() => ({ user, loading, login, logout, updateUser: setUser }), [user, loading, login, logout])
   return <AuthContext.Provider value={value}>{children}</AuthContext.Provider>
 }
 

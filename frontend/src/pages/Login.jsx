@@ -2,6 +2,7 @@ import { useState } from 'react'
 import { Link, Navigate, useLocation, useNavigate } from 'react-router-dom'
 import AuthLayout, { Field, FormError, inputClass, primaryBtn } from '../components/AuthLayout'
 import { useAuth } from '../auth/AuthContext'
+import { homeFor } from '../auth/homeFor'
 
 export default function Login() {
   const { user, login } = useAuth()
@@ -12,7 +13,7 @@ export default function Login() {
   const [error, setError] = useState('')
   const [busy, setBusy] = useState(false)
 
-  if (user) return <Navigate to={state?.from ?? '/dashboard'} replace />
+  if (user) return <Navigate to={state?.from ?? homeFor(user)} replace />
 
   const submit = async (e) => {
     e.preventDefault()
@@ -20,8 +21,8 @@ export default function Login() {
     if (!/^\S+@\S+\.\S+$/.test(email.trim()) || !password) return setError('Enter your email and password')
     setBusy(true)
     try {
-      await login(email.trim().toLowerCase(), password)
-      navigate(state?.from ?? '/dashboard', { replace: true })
+      const u = await login(email.trim().toLowerCase(), password)
+      navigate(state?.from ?? homeFor(u), { replace: true })
     } catch (ex) {
       if (ex.code === 'EMAIL_NOT_VERIFIED') {
         return navigate('/verify', { state: { email: email.trim().toLowerCase(), resendOnLoad: true } })
