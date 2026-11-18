@@ -5,7 +5,9 @@ import { env } from '../../config/env.js'
 import { requireAuth } from '../../middleware/auth.js'
 import { HttpError } from '../../shared/httpError.js'
 import { validateBody } from '../auth/auth.validation.js'
+import { idParam } from '../../shared/routes.js'
 import * as learning from './learning.service.js'
+import * as quizzes from './quiz.service.js'
 
 // Every route here needs a signed-in student (requireAuth is per route so unknown URLs still 404). Mounted at /api/v1.
 export const learningRouter = Router()
@@ -52,6 +54,45 @@ learningRouter.get('/learn/lessons/:lessonId', requireAuth, lessonParam, handle(
 
 learningRouter.put('/learn/lessons/:lessonId/progress', requireAuth, lessonParam, progressLimiter, validateBody(progressBody), handle(async (req, res) => {
   res.json(await learning.saveProgress(req.user.id, req.params.lessonId, req.body))
+}))
+
+// ── quizzes
+const quizParam = idParam('QUIZ_NOT_FOUND', 'Quiz not found')
+const attemptParam = idParam('ATTEMPT_NOT_FOUND', 'Attempt not found')
+
+// Answers autosave as the student clicks, so this limit is higher than the progress one.
+const answerLimiter = rateLimit({
+  windowMs: 60 * 1000,
+  limit: 120,
+  standardHeaders: true,
+  legacyHeaders: false,
+  skip: () => env.NODE_ENV === 'test',
+  keyGenerator: (req) => req.user.id,
+  message: { error: { code: 'TOO_MANY_REQUESTS', message: 'Saving answers too quickly — please slow down' } },
+})
+const answerList = z.array(z.object({ questionId: uuid, selectedOptionIds: z.array(uuid).max(10) }).strict()).max(200)
+const answersBody = z.object({ answers: answerList }).strict()
+const submitBody = z.object({ answers: answerList.optional() }).strict()
+
+learningRouter.get('/learn/quizzes/:quizId', requireAuth, quizParam, handle(async (req, res) => {
+  res.json(await quizzes.quizSummary(req.user.id, req.params.quizId))
+}))
+
+learningRouter.post('/learn/quizzes/:quizId/attempts', requireAuth, quizParam, handle(async (req, res) => {
+  const { attempt, resumed } = await quizzes.startAttempt(req.user.id, req.params.quizId)
+  res.status(resumed ? 200 : 201).json({ attempt, resumed })
+}))
+
+learningRouter.get('/learn/attempts/:attemptId', requireAuth, attemptParam, handle(async (req, res) => {
+  res.json({ attempt: await quizzes.attemptView(req.user.id, req.params.attemptId) })
+}))
+
+learningRouter.put('/learn/attempts/:attemptId/answers', requireAuth, attemptParam, answerLimiter, validateBody(answersBody), handle(async (req, res) => {
+  res.json(await quizzes.saveAnswers(req.user.id, req.params.attemptId, req.body.answers))
+}))
+
+learningRouter.post('/learn/attempts/:attemptId/submit', requireAuth, attemptParam, validateBody(submitBody), handle(async (req, res) => {
+  res.json({ attempt: await quizzes.submitAttempt(req.user.id, req.params.attemptId, req.body.answers) })
 }))
 
 // Registered last: `/learn/:slug` must not swallow `/learn/lessons/...`.

@@ -45,6 +45,7 @@ const moduleShape = (m) => ({
   sortOrder: m.sortOrder,
   isPublished: m.isPublished,
   ...(m.lessons ? { lessons: m.lessons.map(lessonShape) } : {}),
+  ...(m.quizzes ? { quiz: m.quizzes[0] ? { id: m.quizzes[0].id, title: m.quizzes[0].title, status: m.quizzes[0].status, questionCount: m.quizzes[0]._count.questions } : null } : {}),
 })
 
 const courseShape = (c) => ({
@@ -63,7 +64,8 @@ const courseShape = (c) => ({
 })
 
 const orderBy = [{ sortOrder: 'asc' }, { createdAt: 'asc' }]
-const fullTree = { category: true, modules: { orderBy, include: { lessons: { orderBy } } } }
+const moduleQuiz = { where: { quizType: 'MODULE_QUIZ' }, select: { id: true, title: true, status: true, _count: { select: { questions: true } } } }
+const fullTree = { category: true, modules: { orderBy, include: { lessons: { orderBy }, quizzes: moduleQuiz } } }
 
 async function loadCourse(id) {
   const course = await prisma.course.findUnique({ where: { id }, include: fullTree })
@@ -198,7 +200,14 @@ async function assertNoStudentProgress(where, message) {
 export async function deleteModule(id) {
   const mod = await loadModule(id)
   await assertNoStudentProgress({ lesson: { moduleId: id } }, 'Students have watched lessons in this module. Unpublish it instead of deleting it.')
-  await keepingPublishedCourseReady(mod.courseId, (tx) => tx.courseModule.delete({ where: { id } }))
+  if ((await prisma.quizAttempt.count({ where: { quiz: { moduleId: id } } })) > 0) {
+    throw new HttpError(409, 'HAS_STUDENT_PROGRESS', 'Students have attempted this module’s quiz. Unpublish the module instead of deleting it.')
+  }
+  // A quiz without a module would be orphaned, so it goes with the module.
+  await keepingPublishedCourseReady(mod.courseId, async (tx) => {
+    await tx.quiz.deleteMany({ where: { moduleId: id } })
+    await tx.courseModule.delete({ where: { id } })
+  })
 }
 
 export async function reorderModules(courseId, ids) {

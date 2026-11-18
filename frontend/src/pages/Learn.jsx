@@ -207,6 +207,20 @@ export default function Learn() {
                       )
                     })}
                   </ul>
+                  {m.quiz && (
+                    <Link
+                      to={`/quiz/${m.quiz.id}`}
+                      aria-label={`Quiz: ${m.quiz.title}`}
+                      data-testid="module-quiz-link"
+                      className="mt-1.5 flex items-start gap-2 rounded-lg border border-white/10 px-2 py-1.5 text-sm text-ca-muted hover:text-ca-text hover:border-ca-gold/50"
+                    >
+                      <span aria-hidden="true" className={m.quiz.passed ? 'text-emerald-300' : 'text-ca-gold'}>{m.quiz.passed ? '✓' : '❖'}</span>
+                      <span className="min-w-0 flex-1 break-words">{m.quiz.title}</span>
+                      <span className="shrink-0 text-xs">
+                        {m.quiz.passed ? `Passed ${m.quiz.bestPercentage}%` : m.quiz.inProgress ? 'In progress' : m.quiz.bestPercentage !== null ? `Best ${m.quiz.bestPercentage}%` : plural(m.quiz.questionCount, 'question')}
+                      </span>
+                    </Link>
+                  )}
                 </li>
               ))}
             </ol>

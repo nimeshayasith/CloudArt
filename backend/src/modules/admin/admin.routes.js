@@ -5,10 +5,12 @@ import { HttpError } from '../../shared/httpError.js'
 import { validateBody } from '../auth/auth.validation.js'
 import * as admin from './admin.service.js'
 import { contentRouter } from './content.routes.js'
+import { quizAdminRouter } from './quiz.routes.js'
 
 export const adminRouter = Router()
 adminRouter.use(requireAuth, requireAdmin)
 adminRouter.use(contentRouter)
+adminRouter.use(quizAdminRouter)
 
 const wrap = (fn) => (req, res, next) => fn(req, res).catch(next)
 

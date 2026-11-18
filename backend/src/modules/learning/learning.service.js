@@ -2,7 +2,7 @@ import { prisma } from '../../config/prisma.js'
 import { HttpError } from '../../shared/httpError.js'
 
 /** Students may keep learning from a course an admin has since archived; drafts are closed. */
-const LEARNABLE = ['PUBLISHED', 'ARCHIVED']
+export const LEARNABLE = ['PUBLISHED', 'ARCHIVED']
 const DEFAULT_THRESHOLD_PCT = 90
 /** Watch-time the server will credit beyond the wall clock: 2x speed plus a small slack for timers. */
 const SPEED_ALLOWANCE = 2
@@ -10,7 +10,7 @@ const SLACK_SECONDS = 30
 
 const courseNotFound = () => new HttpError(404, 'COURSE_NOT_FOUND', 'Course not found')
 const lessonNotFound = () => new HttpError(404, 'LESSON_NOT_FOUND', 'Lesson not found')
-const notEnrolled = () => new HttpError(403, 'NOT_ENROLLED', 'Enroll in this course to continue')
+export const notEnrolled = () => new HttpError(403, 'NOT_ENROLLED', 'Enroll in this course to continue')
 
 const orderBy = [{ sortOrder: 'asc' }, { createdAt: 'asc' }]
 const liveEnrollment = { status: { in: ['ACTIVE', 'COMPLETED'] } }
@@ -24,7 +24,7 @@ async function publishedCourse(slug) {
 }
 
 /** The caller's enrollment in a course, or null (dropped enrollments count as "not enrolled"). */
-async function activeEnrollment(userId, courseId) {
+export async function activeEnrollment(userId, courseId) {
   return prisma.enrollment.findFirst({ where: { userId, courseId, ...liveEnrollment }, select: { id: true, status: true } })
 }
 
@@ -93,8 +93,43 @@ const playerTree = {
         orderBy,
         select: { id: true, title: true, description: true, durationSeconds: true, isPreview: true },
       },
+      quizzes: {
+        where: { status: 'PUBLISHED', quizType: 'MODULE_QUIZ' },
+        select: {
+          id: true,
+          title: true,
+          totalQuestions: true,
+          durationMinutes: true,
+          passPercentage: true,
+          maxAttempts: true,
+          _count: { select: { questions: { where: { isActive: true } } } },
+        },
+      },
     },
   },
+}
+
+/** Per-quiz standing for one enrollment: attempts used, best score, whether it has been passed. */
+async function quizStandings(enrollmentId, modules) {
+  const quizIds = modules.flatMap((m) => m.quizzes.map((q) => q.id))
+  if (quizIds.length === 0) return new Map()
+  const attempts = await prisma.quizAttempt.findMany({
+    where: { enrollmentId, quizId: { in: quizIds } },
+    select: { quizId: true, status: true, percentage: true, passed: true },
+  })
+  const standing = new Map()
+  for (const a of attempts) {
+    const s = standing.get(a.quizId) ?? { attemptsUsed: 0, bestPercentage: null, passed: false, inProgress: false }
+    if (a.status === 'IN_PROGRESS') s.inProgress = true
+    else {
+      s.attemptsUsed += 1
+      const pct = a.percentage === null ? 0 : Number(a.percentage)
+      s.bestPercentage = s.bestPercentage === null ? pct : Math.max(s.bestPercentage, pct)
+      s.passed = s.passed || a.passed === true
+    }
+    standing.set(a.quizId, s)
+  }
+  return standing
 }
 
 /** Course outline with the student's progress. No video ids: those are released one lesson at a time. */
@@ -112,6 +147,7 @@ export async function courseForLearning(userId, slug) {
     where: { enrollmentId: enrollment.id, lessonId: { in: lessons.map((l) => l.id) } },
   })
   const byLesson = new Map(rows.map((p) => [p.lessonId, p]))
+  const standings = await quizStandings(enrollment.id, course.modules)
 
   return {
     course: { id: course.id, title: course.title, slug: course.slug, description: course.description },
@@ -122,6 +158,7 @@ export async function courseForLearning(userId, slug) {
       id: m.id,
       title: m.title,
       description: m.description,
+      quiz: m.quizzes[0] ? quizOutline(m.quizzes[0], standings.get(m.quizzes[0].id)) : null,
       lessons: m.lessons.map((l) => {
         const p = byLesson.get(l.id)
         return {
@@ -135,6 +172,23 @@ export async function courseForLearning(userId, slug) {
         }
       }),
     })),
+  }
+}
+
+function quizOutline(q, standing) {
+  const used = standing?.attemptsUsed ?? 0
+  return {
+    id: q.id,
+    title: q.title,
+    questionCount: Math.min(q.totalQuestions, q._count.questions),
+    durationMinutes: q.durationMinutes,
+    passPercentage: Number(q.passPercentage),
+    maxAttempts: q.maxAttempts,
+    attemptsUsed: used,
+    attemptsLeft: q.maxAttempts === null ? null : Math.max(0, q.maxAttempts - used),
+    bestPercentage: standing?.bestPercentage ?? null,
+    passed: standing?.passed ?? false,
+    inProgress: standing?.inProgress ?? false,
   }
 }
 

@@ -72,6 +72,17 @@ Modules share the database but not business logic.
 | `GET /learn/:slug` | enrolled | Course outline for the player: published content, per-lesson progress, overall progress, resume point. **No video ids** |
 | `GET /learn/lessons/:lessonId` | enrolled, or any signed-in user for free-preview lessons | One lesson's `youtubeVideoId` and `startSeconds`. Video ids are released one lesson at a time |
 | `PUT /learn/lessons/:lessonId/progress` | enrolled | Save `{ positionSeconds, durationSeconds? }`; returns the lesson's state and course progress (60 requests/min per user) |
+| `GET /admin/courses/:id/quizzes` | admin | Quizzes of a course with active-question and attempt counts |
+| `POST /admin/modules/:id/quiz` | admin | Create the module's quiz (one per module, starts as `DRAFT`) |
+| `GET/PATCH/DELETE /admin/quizzes/:id` | admin | Quiz with its questions and **answer key**; settings and status; delete only if never attempted |
+| `GET /admin/quizzes/:id/attempts?page=&pageSize=` | admin | Students' attempts with scores (`pageSize` ≤ 50) |
+| `POST /admin/quizzes/:id/questions`, `PUT /admin/quizzes/:id/questions/order` | admin | Add a question with its options in one request; reorder |
+| `PATCH/DELETE /admin/questions/:id` | admin | Edit (options are replaced as a set), activate/deactivate, delete |
+| `GET /learn/quizzes/:quizId` | enrolled | Rules, attempts used/left, best score, history, open attempt |
+| `POST /learn/quizzes/:quizId/attempts` | enrolled | Start an attempt (201) or resume the open one (200) |
+| `GET /learn/attempts/:attemptId` | owner | The attempt: questions without the key while open; with key and explanations once finished |
+| `PUT /learn/attempts/:attemptId/answers` | owner | Autosave answers (120 requests/min per user) |
+| `POST /learn/attempts/:attemptId/submit` | owner | Submit (optionally with the final answers); idempotent |
 
 A disabled user is locked out immediately: the next API call returns `403 ACCOUNT_DISABLED`,
 and the login screen shows the message without keeping a session.
@@ -101,6 +112,23 @@ and the login screen shows the message without keeping a session.
 - Free-preview lessons can be opened by any signed-in user through the API, but there is no UI for it yet.
 - Enrollment status stays `ACTIVE`: `COMPLETED` is reserved for passing the final exam (Phase 7).
 
+**Quiz rules (Phase 6)**
+
+- One quiz per module. A quiz can be `PUBLISHED` only with at least one active question and no more questions per attempt
+  than active questions (`409 QUIZ_NOT_READY`); a live quiz cannot be edited into an invalid state or lose its last active question.
+- Question types: `SINGLE_CHOICE` (exactly one correct), `TRUE_FALSE` (two options, one correct), `MULTIPLE_SELECT`
+  (at least one correct). Multi-select is **all-or-nothing**: the selection must equal the correct set exactly.
+- An attempt **snapshots** its questions (`attempt_questions`) when it starts. Questions students have already received
+  cannot be reworded, re-optioned, re-marked or deleted (`409 QUESTION_IN_USE`); only the explanation and the active flag
+  can change. Deactivate and add a corrected question instead.
+- The answer key (`isCorrect`) and explanations are never sent while an attempt is open; they come back with the review.
+- Marks are weighed per question; `percentage >= pass mark` passes (inclusive). Unanswered questions score 0.
+- Time limit: the server stamps `expires_at`. Saves or a submit arriving up to 5 s late are honoured; after that the
+  attempt is graded as it stands (`EXPIRED`), and further saves return `409 ATTEMPT_EXPIRED`. An expired attempt counts as used.
+- Only one attempt is open at a time (starting again resumes it). `max_attempts` counts finished attempts.
+- Submitting twice returns the same result and never regrades. Concurrent starts and submits are race-safe.
+- Quizzes (and modules) with attempts are never deleted: archive or unpublish them.
+
 ## Environments
 
 - Local: Docker Compose PostgreSQL (`docker-compose.yml`), `backend/.env`.
@@ -112,8 +140,8 @@ and the login screen shows the message without keeping a session.
 2. Cognito: register, verify email, login, profiles — done
 3. Student/admin dashboards — done
 4. Categories, courses, modules, lessons — done
-5. Enrollment, YouTube player, resume-where-you-left-off  ← **this phase**
-6. Module quizzes + question management (+ Excel import/export)
+5. Enrollment, YouTube player, resume-where-you-left-off — done
+6. Module quizzes + question management  ← **this phase** (Excel import/export is Phase 8)
 7. Final exam + locking
 8. Reports and exports
 9. CloudArt Labs

@@ -2,27 +2,12 @@ import { useCallback, useEffect, useState } from 'react'
 import { Link, useNavigate, useParams } from 'react-router-dom'
 import AppShell, { LoadError, Loading, Panel } from '../components/AppShell'
 import { Field, FormError, inputClass } from '../components/AuthLayout'
+import ConfirmButton from '../components/ConfirmButton'
 import StatusBadge from '../components/StatusBadge'
 import { authedApi } from '../lib/api'
 import { DIFFICULTIES } from '../lib/courseConstants'
 import { formatDuration, plural, pretty } from '../lib/format'
-
-const smallBtn = 'rounded-full border border-white/15 px-3 py-1 text-xs text-ca-muted hover:text-ca-gold hover:border-ca-gold/50 disabled:opacity-40 disabled:hover:text-ca-muted disabled:hover:border-white/15'
-const goldBtn = 'rounded-full bg-ca-gold text-ca-bg px-4 py-1.5 text-sm font-medium hover:bg-[#ffd47a] disabled:opacity-60'
-
-/** Two-step destructive action: the first click asks, the second confirms. */
-function ConfirmButton({ label, confirmLabel, ariaLabel, onConfirm, disabled }) {
-  const [asking, setAsking] = useState(false)
-  if (!asking) {
-    return <button type="button" aria-label={ariaLabel} disabled={disabled} onClick={() => setAsking(true)} className={smallBtn}>{label}</button>
-  }
-  return (
-    <span className="inline-flex items-center gap-2">
-      <button type="button" disabled={disabled} onClick={async () => { await onConfirm(); setAsking(false) }} className="rounded-full bg-red-500/90 text-white px-3 py-1 text-xs hover:bg-red-500 disabled:opacity-60">{confirmLabel}</button>
-      <button type="button" onClick={() => setAsking(false)} className="text-xs text-ca-muted hover:text-ca-text">Cancel</button>
-    </span>
-  )
-}
+import { goldBtn, smallBtn } from '../lib/ui'
 
 // ───────────────────────────── course details ─────────────────────────────
 
@@ -187,6 +172,7 @@ function LessonRow({ lesson, index, count, busy, act, move }) {
 // ───────────────────────────── modules ─────────────────────────────
 
 function ModuleCard({ module: mod, index, count, busy, act, moveModule }) {
+  const navigate = useNavigate()
   const [editing, setEditing] = useState(false)
   const [adding, setAdding] = useState(false)
   const [draft, setDraft] = useState({ title: mod.title, description: mod.description })
@@ -196,6 +182,12 @@ function ModuleCard({ module: mod, index, count, busy, act, moveModule }) {
     const ids = mod.lessons.map((l) => l.id)
     ;[ids[i], ids[i + dir]] = [ids[i + dir], ids[i]]
     return act(() => authedApi(`/admin/modules/${mod.id}/lessons/order`, { method: 'PUT', body: { ids } }))
+  }
+
+  const addQuiz = async () => {
+    let quizId = null
+    const ok = await act(async () => { quizId = (await authedApi(`/admin/modules/${mod.id}/quiz`, { method: 'POST', body: {} })).quiz.id })
+    if (ok && quizId) navigate(`/admin/quizzes/${quizId}`)
   }
 
   const saveModule = async (e) => {
@@ -244,6 +236,19 @@ function ModuleCard({ module: mod, index, count, busy, act, moveModule }) {
         {mod.lessons.map((l, i) => <LessonRow key={l.id} lesson={l} index={i} count={mod.lessons.length} busy={busy} act={act} move={moveLesson} />)}
       </ul>
       {mod.lessons.length === 0 && !adding && <p className="mt-3 text-sm text-ca-muted">No lessons yet.</p>}
+
+      <div className="mt-3 flex flex-wrap items-center gap-2 border-t border-white/10 pt-3" data-testid="module-quiz">
+        {mod.quiz ? (
+          <>
+            <span className="text-sm text-ca-text">Quiz: {mod.quiz.title}</span>
+            <StatusBadge status={mod.quiz.status} />
+            <span className="text-xs text-ca-muted">{plural(mod.quiz.questionCount, 'question')}</span>
+            <Link to={`/admin/quizzes/${mod.quiz.id}`} aria-label={`Manage quiz for ${mod.title}`} className={smallBtn}>Manage quiz</Link>
+          </>
+        ) : (
+          <button type="button" disabled={busy} onClick={addQuiz} aria-label={`Add quiz to ${mod.title}`} className={smallBtn}>+ Add quiz</button>
+        )}
+      </div>
 
       <div className="mt-3">
         {adding ? (
