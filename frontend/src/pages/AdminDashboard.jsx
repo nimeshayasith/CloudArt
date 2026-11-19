@@ -36,6 +36,9 @@ function Stats() {
         <Link to="/admin/payments" aria-label="Payments — review payments" className="block rounded-2xl focus:outline-none focus-visible:ring-2 focus-visible:ring-ca-gold">
           <StatCard label="Payments to review" value={s.payments.awaitingReview} hint={`${s.payments.activeSubscribers} subscribers · manage →`} />
         </Link>
+        <Link to="/admin/services" aria-label="Service requests — review requests" className="block rounded-2xl focus:outline-none focus-visible:ring-2 focus-visible:ring-ca-gold">
+          <StatCard label="New service requests" value={s.services.newRequests} hint={`${s.services.awaitingClient} awaiting client · ${s.services.activeProjects} projects · manage →`} />
+        </Link>
       </div>
       <Panel title="Recent sign-ups">
         {s.recentSignups.length === 0 ? (

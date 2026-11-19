@@ -113,6 +113,23 @@ Modules share the database but not business logic.
 | `POST /admin/subscriptions/:id/approve`, `/reject`, `/revoke` | admin | Approve a screenshot (starts the plan), reject with a reason, or end an active plan |
 | `GET /admin/payment-proofs/:id/file` | admin | The screenshot image (never public, never cached) |
 | `GET /admin/exports/subscriptions.xlsx` | admin | Excel: every subscription with price, discount, voucher and dates |
+| `GET /service-categories` | public | The services clients can ask for |
+| `POST /service-requests` | signed in | Send a request (10 per hour, at most 10 open at once). Always starts as `SUBMITTED` |
+| `GET /service-requests?status=` | signed in | My requests, with `unread` and `proposalWaiting` markers |
+| `GET /service-requests/:id` | owner | One request: details, files, proposals (never drafts), project, messages. Anyone else gets 404 |
+| `PATCH /service-requests/:id` | owner | Reword it, only while `SUBMITTED` |
+| `POST /service-requests/:id/cancel` | owner | Cancel an open request (withdraws a waiting proposal) |
+| `POST /service-requests/:id/messages`, `/read` | owner | Write to the team (30 per 10 min); mark replies as read |
+| `POST /service-requests/:id/attachments` | owner | Attach a file as the raw body, name in `X-File-Name` (max 10 MB, 10 files) |
+| `GET /service-attachments/:id/file`, `DELETE …/:id` | owner | Download (always as an attachment) or remove a file |
+| `POST /service-proposals/:id/accept`, `/reject` | owner | Answer a sent proposal; accepting creates the project |
+| `GET/POST/PATCH/DELETE /admin/service-categories` | admin | Manage the services (a used one cannot be deleted) |
+| `GET /admin/service-requests?status=&q=` and `/:id` | admin | The queue and one request with drafts and real author names |
+| `POST /admin/service-requests/:id/review`, `/decline`, `/messages`, `/read`, `/proposals` | admin | Start review, decline with a reason, reply, mark read, write a draft proposal |
+| `PATCH/DELETE /admin/service-proposals/:id`, `POST …/send`, `…/withdraw` | admin | Edit or delete a draft; send it; withdraw a sent one |
+| `PATCH /admin/service-projects/:id`, `POST …/milestones`, `PATCH/DELETE /admin/project-milestones/:id` | admin | Run the project: status, milestones |
+| `GET/DELETE /admin/service-attachments/:id` | admin | Download or remove a client's file |
+| `GET /admin/exports/service-requests.xlsx` | admin | Excel: every request with the offer, project status and milestone counts |
 | `GET/PUT /admin/courses/:id/exam-policy` | admin | Unlock rules: `requireAllLessons`, `requireModuleQuizzes`, `lessonWatchThresholdPct` (defaults apply when no row exists) |
 
 A disabled user is locked out immediately: the next API call returns `403 ACCOUNT_DISABLED`,
@@ -226,6 +243,36 @@ and the login screen shows the message without keeping a session.
 - Not built: automatic renewals, refunds beyond "revoke", emails to students (approval and rejection are shown in the app), and
   per-plan content bundles (any plan unlocks all Premium content).
 
+**Client service requests (Phase 11)**
+
+- **Flow:** the client sends a request (`SUBMITTED`). The admin starts review (`UNDER_REVIEW`), writes a proposal (a private
+  `DRAFT`), and sends it (`PROPOSAL_SENT`). The client accepts (`ACCEPTED`, which **creates the project**) or declines with a note
+  (back to `UNDER_REVIEW`, so a new offer can be sent). An admin can decline a request with a reason (`REJECTED`); the client can
+  cancel an open one (`CANCELLED`). Allowed moves live in one table (`services/rules.js`); `ACCEPTED`, `REJECTED` and `CANCELLED`
+  are final. Requests are never deleted.
+- **Privacy:** a request, its files, proposals, project and messages are visible to its owner and to administrators only; anyone
+  else gets 404 (never 403, so ids cannot be probed). Drafts are never shown to the client. Staff messages show as "CloudArt team"
+  to clients, while administrators see who wrote them. Whether a message is staff is decided by the route it came in on, never by the body.
+- **Proposals:** a draft can be edited or deleted; once sent it is locked, so a price never changes under the client (withdraw it
+  and write a new one). A proposal needs a cost (0 is allowed), a currency and a duration before it can be sent, only one proposal can be
+  waiting for an answer, and a proposal can only be answered while the request is waiting for it. Accepting and withdrawing at the same
+  moment, or two accepts, are serialised by a row lock on the request: exactly one wins and exactly one project exists.
+- **Projects:** `PLANNED → IN_PROGRESS → ON_HOLD / COMPLETED / CANCELLED`. A project can only be **completed when every milestone is
+  done**; a finished project (`COMPLETED` or `CANCELLED`) is frozen. At most 50 milestones. Clients see status, milestones and progress,
+  read-only.
+- **Messages:** plain text (shown as text, never HTML), 4000 characters, never edited or deleted, newest 200 returned. They stop when a
+  request is declined or cancelled and continue after acceptance. "New reply" markers use `last_*_message_at` and `*_seen_at` on the
+  request, so no per-message read rows are needed. There are no emails yet.
+- **Files:** PDF, PNG, JPEG, WebP, Word (`.docx`), Excel (`.xlsx`) and plain text, up to 10 MB and 10 per request. The type is decided
+  from the **bytes** (a zip must contain the Word or Excel marker part; text must be valid UTF-8 without NUL bytes) and must match the
+  declared content type. Stored names are generated (`requests/<uuid>.<ext>`); the shown name is cleaned (no paths or reserved characters)
+  and given the proven extension. Downloads are always `Content-Disposition: attachment` with `nosniff` and `no-store`. The file limit
+  and closed check run under the request's row lock, and a refused upload leaves no file behind. The client can remove files only while
+  `SUBMITTED` or `UNDER_REVIEW`; an administrator can at any time. At deployment these move to S3 behind `shared/storage.js`.
+- **Limits against abuse:** 10 requests per hour and at most 10 open at once per client (the cap is checked under a lock on the user row),
+  30 messages per 10 minutes, 40 uploads per hour.
+- Not built: emails (new proposal, new reply), files attached by the admin, attaching to messages, editing or deleting messages.
+
 **Excel import and export (Phase 8)**
 
 - Exports are generated on demand with `exceljs`, sent as `attachment` with `Cache-Control: no-store` (they contain personal
@@ -261,6 +308,6 @@ and the login screen shows the message without keeping a session.
 7. Final exam + locking — done
 8. Reports, Excel exports and question import — done
 9. CloudArt Labs — done
-10. Subscriptions, vouchers and bank-transfer payments (premium content)  ← **this phase**
-11. Client service requests
+10. Subscriptions, vouchers and bank-transfer payments (premium content) — done
+11. Client service requests  ← **this phase**
 12. AWS production deployment

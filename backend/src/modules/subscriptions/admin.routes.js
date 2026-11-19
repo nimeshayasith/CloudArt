@@ -2,29 +2,24 @@ import { Router } from 'express'
 import { z } from 'zod'
 import { HttpError } from '../../shared/httpError.js'
 import { handle, idParam } from '../../shared/routes.js'
+import { atLeastOne, currencyCode, money } from '../../shared/validation.js'
 import { validateBody } from '../auth/auth.validation.js'
 import * as admin from './admin.service.js'
 
 // Mounted inside adminRouter, so requireAuth + requireAdmin already ran.
 export const subscriptionAdminRouter = Router()
 
-const atLeastOne = (schema) => schema.refine((v) => Object.keys(v).length > 0, { message: 'Nothing to update' })
 const plan = idParam('PLAN_NOT_FOUND', 'Plan not found')
 const voucher = idParam('VOUCHER_NOT_FOUND', 'Voucher not found')
 const subscription = idParam('SUBSCRIPTION_NOT_FOUND', 'Subscription not found')
 const proof = idParam('PROOF_NOT_FOUND', 'Proof not found')
 
 // ── plans
-const money = z
-  .number({ message: 'Enter an amount' })
-  .min(0, 'The price cannot be negative')
-  .max(10_000_000, 'That price is too high')
-  .refine((v) => Math.abs(v * 100 - Math.round(v * 100)) < 1e-6, 'Use at most 2 decimal places')
 const planFields = {
   name: z.string().trim().min(2, 'Name must be at least 2 characters').max(100),
   description: z.string().trim().max(2000).optional(),
   priceAmount: money,
-  currency: z.string().trim().regex(/^[A-Za-z]{3}$/, 'Use a 3-letter currency code such as USD or LKR'),
+  currency: currencyCode,
   durationDays: z.number({ message: 'Enter a number of days' }).int().min(1, 'At least 1 day').max(3650, 'At most 3650 days'),
   isActive: z.boolean().optional(),
   sortOrder: z.number().int().min(0).max(1000).optional(),

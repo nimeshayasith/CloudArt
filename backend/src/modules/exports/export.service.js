@@ -174,6 +174,67 @@ export async function subscriptionsWorkbook() {
   return { wb, filename: `cloudart-subscriptions-${today()}.xlsx` }
 }
 
+// ───────────────────────────── service requests ─────────────────────────────
+
+const REQUEST_LABEL = { SUBMITTED: 'Submitted', UNDER_REVIEW: 'Under review', PROPOSAL_SENT: 'Proposal sent', ACCEPTED: 'Accepted', REJECTED: 'Declined', CANCELLED: 'Cancelled' }
+const PROJECT_LABEL = { PLANNED: 'Planned', IN_PROGRESS: 'In progress', ON_HOLD: 'On hold', COMPLETED: 'Completed', CANCELLED: 'Cancelled' }
+
+export async function serviceRequestsWorkbook() {
+  const rows = await prisma.serviceRequest.findMany({
+    orderBy: { createdAt: 'desc' },
+    include: {
+      category: { select: { name: true } },
+      user: { select: { fullName: true, email: true, organization: { select: { name: true } } } },
+      proposals: { where: { status: { in: ['SENT', 'ACCEPTED'] } }, orderBy: { createdAt: 'desc' }, take: 1 },
+      project: { select: { status: true, milestones: { select: { status: true } } } },
+    },
+  })
+  const { wb } = buildSheet({
+    sheetName: 'Service requests',
+    columns: [
+      { header: 'Client', key: 'client', width: 26 },
+      { header: 'Email', key: 'email', width: 32 },
+      { header: 'Organization', key: 'organization', width: 26 },
+      { header: 'Service', key: 'service', width: 26 },
+      { header: 'Title', key: 'title', width: 38 },
+      { header: 'Cloud', key: 'cloud', width: 14 },
+      { header: 'Budget note', key: 'budget', width: 20 },
+      { header: 'Wanted by', key: 'deadline', width: 14 },
+      { header: 'Status', key: 'status', width: 16 },
+      { header: 'Submitted', key: 'submitted', width: 14 },
+      { header: 'Offered cost', key: 'cost', width: 14 },
+      { header: 'Currency', key: 'currency', width: 10 },
+      { header: 'Offered days', key: 'days', width: 12 },
+      { header: 'Project', key: 'project', width: 14 },
+      { header: 'Milestones done', key: 'done', width: 16 },
+      { header: 'Milestones total', key: 'total', width: 16 },
+    ],
+    rows: rows.map((r) => {
+      const offer = r.proposals[0]
+      const milestones = r.project?.milestones ?? []
+      return {
+        client: safeText(r.user.fullName),
+        email: safeText(r.user.email),
+        organization: safeText(r.user.organization?.name),
+        service: safeText(r.category.name),
+        title: safeText(r.title),
+        cloud: safeText(r.cloudProvider),
+        budget: safeText(r.budgetRange),
+        deadline: date(r.requestedDeadline),
+        status: REQUEST_LABEL[r.status],
+        submitted: date(r.createdAt),
+        cost: num(offer?.estimatedCost),
+        currency: offer?.currency ?? '',
+        days: offer?.estimatedDurationDays ?? null,
+        project: r.project ? PROJECT_LABEL[r.project.status] : '',
+        done: r.project ? milestones.filter((m) => m.status === 'DONE').length : null,
+        total: r.project ? milestones.length : null,
+      }
+    }),
+  })
+  return { wb, filename: `cloudart-service-requests-${today()}.xlsx` }
+}
+
 // ───────────────────────────── lab progress ─────────────────────────────
 
 export async function labProgressWorkbook(labId) {

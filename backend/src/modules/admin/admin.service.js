@@ -1,5 +1,6 @@
 import { prisma } from '../../config/prisma.js'
 import { HttpError } from '../../shared/httpError.js'
+import { serviceStats } from '../services/admin.service.js'
 
 const DAY = 24 * 60 * 60 * 1000
 
@@ -7,8 +8,9 @@ const DAY = 24 * 60 * 60 * 1000
 export async function stats() {
   const since = new Date(Date.now() - 7 * DAY)
   const now = new Date()
-  const [pendingPayments, activeSubscribers, totalUsers, students, admins, disabled, newThisWeek, coursesPublished, coursesDraft, activeEnrollments, completedEnrollments, orgs, recent] =
+  const [services, pendingPayments, activeSubscribers, totalUsers, students, admins, disabled, newThisWeek, coursesPublished, coursesDraft, activeEnrollments, completedEnrollments, orgs, recent] =
     await Promise.all([
+      serviceStats(),
       prisma.subscription.count({ where: { status: 'PENDING', proofs: { some: { status: 'PENDING' } } } }),
       prisma.subscription.findMany({ where: { status: 'ACTIVE', startsAt: { lte: now }, endsAt: { gt: now } }, distinct: ['userId'], select: { userId: true } }).then((r) => r.length),
       prisma.user.count(),
@@ -33,6 +35,7 @@ export async function stats() {
     courses: { published: coursesPublished, draft: coursesDraft },
     enrollments: { active: activeEnrollments, completed: completedEnrollments },
     payments: { awaitingReview: pendingPayments, activeSubscribers },
+    services,
     organizations: orgs,
     recentSignups: recent.map((u) => ({ id: u.id, fullName: u.fullName, username: u.username, organization: u.organization?.name ?? null, createdAt: u.createdAt })),
   }

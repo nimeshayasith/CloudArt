@@ -1,3 +1,4 @@
+import { Link } from 'react-router-dom'
 import SectionHeader from './SectionHeader'
 import { services } from '../content/site'
 
@@ -32,6 +33,9 @@ export default function Services() {
           )
         })}
       </div>
+      <p className="mt-10 text-center">
+        <Link to="/services/new" className="inline-block rounded-full bg-ca-gold text-ca-bg px-6 py-2.5 text-sm font-medium hover:bg-[#ffd47a]">Request a service</Link>
+      </p>
     </section>
   )
 }

@@ -18,6 +18,7 @@ const download = (build) => handle(async (req, res) => {
 })
 
 exportRouter.get('/exports/users.xlsx', download(() => exports_.usersWorkbook()))
+exportRouter.get('/exports/service-requests.xlsx', download(() => exports_.serviceRequestsWorkbook()))
 exportRouter.get('/exports/subscriptions.xlsx', download(() => exports_.subscriptionsWorkbook()))
 exportRouter.get('/exports/courses/:id/progress.xlsx', course, download((req) => exports_.courseProgressWorkbook(req.params.id)))
 exportRouter.get('/exports/labs/:id/progress.xlsx', lab, download((req) => exports_.labProgressWorkbook(req.params.id)))

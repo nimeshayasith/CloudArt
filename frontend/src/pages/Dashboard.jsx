@@ -35,6 +35,32 @@ function SubscriptionCard() {
   )
 }
 
+function ServicesCard() {
+  const [data, setData] = useState(null)
+  useEffect(() => {
+    let stale = false
+    authedApi('/service-requests?pageSize=50').then((d) => !stale && setData(d)).catch(() => {})
+    return () => { stale = true }
+  }, [])
+  if (!data) return null
+  const waiting = data.requests.filter((r) => r.proposalWaiting).length
+  const unread = data.requests.filter((r) => r.unread).length
+  return (
+    <div className="mb-6 rounded-2xl border border-white/10 bg-ca-bg2/60 p-4 flex flex-wrap items-center justify-between gap-3" data-testid="services-card">
+      {data.total === 0 ? (
+        <p className="text-sm text-ca-muted">Need help deploying something? Ask the CloudArt team for a proposal.</p>
+      ) : waiting > 0 ? (
+        <p className="text-sm text-ca-gold">You have {waiting} proposal{waiting === 1 ? '' : 's'} waiting for your answer.</p>
+      ) : unread > 0 ? (
+        <p className="text-sm text-ca-cyan">You have {unread} new repl{unread === 1 ? 'y' : 'ies'} on your service requests.</p>
+      ) : (
+        <p className="text-sm text-ca-muted">You have {data.total} service request{data.total === 1 ? '' : 's'}.</p>
+      )}
+      <Link to={data.total === 0 ? '/services/new' : '/services'} className="text-sm text-ca-gold hover:underline">{data.total === 0 ? 'Request a service' : 'My requests'}</Link>
+    </div>
+  )
+}
+
 export default function Dashboard() {
   const { user } = useAuth()
   const [data, setData] = useState(null)
@@ -58,6 +84,7 @@ export default function Dashboard() {
         <Link to="/admin" className="mb-6 inline-block text-sm text-ca-gold hover:underline">Go to the admin dashboard →</Link>
       )}
       <SubscriptionCard />
+      <ServicesCard />
       {error && <LoadError message={error} onRetry={load} />}
       {!error && !data && <Loading label="Loading your dashboard…" />}
       {data && (

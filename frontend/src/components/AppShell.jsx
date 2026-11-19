@@ -22,10 +22,12 @@ export default function AppShell({ title, subtitle, children }) {
             {isAdmin && <NavLink to="/admin/courses" className={linkClass}>Manage courses</NavLink>}
             {isAdmin && <NavLink to="/admin/labs" className={linkClass}>Manage labs</NavLink>}
             {isAdmin && <NavLink to="/admin/payments" className={linkClass}>Payments</NavLink>}
+            {isAdmin && <NavLink to="/admin/services" className={linkClass}>Service requests</NavLink>}
             <NavLink to="/dashboard" end className={linkClass}>My learning</NavLink>
             <NavLink to="/courses" className={linkClass}>Courses</NavLink>
             <NavLink to="/labs" className={linkClass}>Labs</NavLink>
             <NavLink to="/pricing" className={linkClass}>Plans</NavLink>
+            <NavLink to="/services" className={linkClass}>Services</NavLink>
             <NavLink to="/dashboard/profile" className={linkClass}>Profile</NavLink>
           </nav>
           <div className="ml-auto flex items-center gap-3">

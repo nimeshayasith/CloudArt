@@ -9,7 +9,7 @@ import { env } from '../config/env.js'
  * "<folder>/<uuid>.<ext>" with a fixed set of folders and extensions.
  */
 const root = () => path.resolve(env.UPLOAD_DIR)
-const KEY = /^(payments)\/[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}\.(jpg|png|webp)$/
+const KEY = /^(payments|requests)\/[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}\.(jpg|png|webp|pdf|docx|xlsx|txt)$/
 
 /** Absolute path for a key, or throws if the key is not one this module could have produced. */
 function locate(key) {

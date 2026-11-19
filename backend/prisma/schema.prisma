@@ -87,6 +87,7 @@ enum ProposalStatus {
   SENT
   ACCEPTED
   REJECTED
+  WITHDRAWN
 }
 
 enum ProjectStatus {
@@ -150,6 +151,7 @@ model User {
   labsCreated     Lab[]
   subscriptions   Subscription[]
   reviewedProofs  PaymentProof[] @relation("ProofReviewer")
+  serviceMessages ServiceRequestMessage[]
 
   @@index([organizationId])
   @@map("users")
@@ -534,6 +536,14 @@ model ServiceRequest {
   budgetRange       String?              @map("budget_range") @db.VarChar(100)
   requestedDeadline DateTime?            @map("requested_deadline") @db.Date
   status            ServiceRequestStatus @default(SUBMITTED)
+  /// Why the request was declined (by the admin) or cancelled (by the client); shown to the client.
+  closedReason      String?              @map("closed_reason") @db.VarChar(500)
+  closedAt          DateTime?            @map("closed_at") @db.Timestamptz(6)
+  /// Conversation bookkeeping, so "new reply" markers need no per-message read rows.
+  lastStaffMessageAt  DateTime?          @map("last_staff_message_at") @db.Timestamptz(6)
+  lastClientMessageAt DateTime?          @map("last_client_message_at") @db.Timestamptz(6)
+  clientSeenAt        DateTime?          @map("client_seen_at") @db.Timestamptz(6)
+  staffSeenAt         DateTime?          @map("staff_seen_at") @db.Timestamptz(6)
   createdAt         DateTime             @default(now()) @map("created_at") @db.Timestamptz(6)
   updatedAt         DateTime             @updatedAt @map("updated_at") @db.Timestamptz(6)
 
@@ -541,6 +551,7 @@ model ServiceRequest {
   category    ServiceCategory            @relation(fields: [categoryId], references: [id], onDelete: Restrict)
   attachments ServiceRequestAttachment[]
   proposals   ServiceProposal[]
+  messages    ServiceRequestMessage[]
   project     ServiceProject?
 
   @@index([status])
@@ -552,7 +563,10 @@ model ServiceRequestAttachment {
   id               String   @id @default(dbgenerated("gen_random_uuid()")) @db.Uuid
   serviceRequestId String   @map("service_request_id") @db.Uuid
   fileName         String   @map("file_name") @db.VarChar(255)
+  /// Key inside the storage layer (a local folder now, an S3 bucket at deploy). Never taken from the client.
   s3ObjectKey      String   @map("s3_object_key")
+  contentType      String   @default("application/octet-stream") @map("content_type") @db.VarChar(100)
+  sizeBytes        Int      @default(0) @map("size_bytes")
   uploadedAt       DateTime @default(now()) @map("uploaded_at") @db.Timestamptz(6)
 
   serviceRequest ServiceRequest @relation(fields: [serviceRequestId], references: [id], onDelete: Cascade)
@@ -566,9 +580,16 @@ model ServiceProposal {
   serviceRequestId      String         @map("service_request_id") @db.Uuid
   proposalDescription   String         @map("proposal_description")
   estimatedCost         Decimal?       @map("estimated_cost") @db.Decimal(12, 2)
+  /// ISO-style currency code chosen by the admin, e.g. "USD" or "LKR".
+  currency              String?        @db.VarChar(3)
   estimatedDurationDays Int?           @map("estimated_duration_days")
   status                ProposalStatus @default(DRAFT)
+  sentAt                DateTime?      @map("sent_at") @db.Timestamptz(6)
+  respondedAt           DateTime?      @map("responded_at") @db.Timestamptz(6)
+  /// The client's note when they decline a proposal.
+  responseNote          String?        @map("response_note") @db.VarChar(500)
   createdAt             DateTime       @default(now()) @map("created_at") @db.Timestamptz(6)
+  updatedAt             DateTime       @default(now()) @updatedAt @map("updated_at") @db.Timestamptz(6)
 
   serviceRequest ServiceRequest @relation(fields: [serviceRequestId], references: [id], onDelete: Cascade)
 
@@ -583,6 +604,7 @@ model ServiceProject {
   status           ProjectStatus @default(PLANNED)
   startedAt        DateTime?     @map("started_at") @db.Timestamptz(6)
   completedAt      DateTime?     @map("completed_at") @db.Timestamptz(6)
+  createdAt        DateTime      @default(now()) @map("created_at") @db.Timestamptz(6)
 
   serviceRequest ServiceRequest    @relation(fields: [serviceRequestId], references: [id], onDelete: Restrict)
   milestones     ProjectMilestone[]
@@ -597,12 +619,31 @@ model ProjectMilestone {
   description      String          @default("")
   status           MilestoneStatus @default(PENDING)
   dueDate          DateTime?       @map("due_date") @db.Date
+  sortOrder        Int             @default(0) @map("sort_order")
   completedAt      DateTime?       @map("completed_at") @db.Timestamptz(6)
+  createdAt        DateTime        @default(now()) @map("created_at") @db.Timestamptz(6)
 
   serviceProject ServiceProject @relation(fields: [serviceProjectId], references: [id], onDelete: Cascade)
 
   @@index([serviceProjectId])
   @@map("project_milestones")
+}
+
+/// The conversation on a request. Messages are never edited or deleted, so what was agreed stays on record.
+model ServiceRequestMessage {
+  id               String   @id @default(dbgenerated("gen_random_uuid()")) @db.Uuid
+  serviceRequestId String   @map("service_request_id") @db.Uuid
+  authorId         String   @map("author_id") @db.Uuid
+  /// True when an administrator wrote it (decided by the server, never by the client).
+  isStaff          Boolean  @map("is_staff")
+  body             String
+  createdAt        DateTime @default(now()) @map("created_at") @db.Timestamptz(6)
+
+  serviceRequest ServiceRequest @relation(fields: [serviceRequestId], references: [id], onDelete: Cascade)
+  author         User           @relation(fields: [authorId], references: [id], onDelete: Restrict)
+
+  @@index([serviceRequestId, createdAt])
+  @@map("service_request_messages")
 }
 
 // ───────────────────── 07 · Subscriptions and payments ─────────────────────

@@ -18,7 +18,7 @@ export const tokenStore = {
   clear: () => localStorage.removeItem(KEY),
 }
 
-async function raw(path, { method = 'GET', body, token, blob = false, file } = {}) {
+async function raw(path, { method = 'GET', body, token, blob = false, file, headers = {} } = {}) {
   let res
   try {
     res = await fetch(`${BASE}${path}`, {
@@ -26,6 +26,7 @@ async function raw(path, { method = 'GET', body, token, blob = false, file } = {
       headers: {
         'Content-Type': file ? (file.type || 'application/octet-stream') : 'application/json',
         ...(token ? { Authorization: `Bearer ${token}` } : {}),
+        ...headers,
       },
       body: file ?? (body ? JSON.stringify(body) : undefined),
     })
@@ -64,4 +65,4 @@ export async function authedApi(path, opts = {}) {
 export const authedBlob = (path) => authedApi(path, { blob: true })
 
 /** Authenticated upload of a file as the raw request body (e.g. an Excel import). */
-export const authedUpload = (path, file) => authedApi(path, { method: 'POST', file })
+export const authedUpload = (path, file, headers) => authedApi(path, { method: 'POST', file, headers })
