@@ -1,5 +1,6 @@
 import { prisma } from '../../config/prisma.js'
 import { PROFESSIONAL_CATEGORIES } from '../auth/auth.validation.js'
+import { summarizeSteps } from '../labs/lab.service.js'
 
 const userInclude = { organization: { select: { id: true, name: true } } }
 
@@ -60,7 +61,38 @@ export async function studentDashboard(userId) {
     }),
   ])
 
+  const [labEnrollments, exploreLabs] = await Promise.all([
+    prisma.labEnrollment.findMany({
+      where: { userId, status: { not: 'DROPPED' } },
+      orderBy: { enrolledAt: 'desc' },
+      select: {
+        id: true,
+        status: true,
+        completedAt: true,
+        lab: { select: { id: true, title: true, slug: true, difficulty: true, steps: { select: { id: true, isRequired: true } } } },
+        stepProgress: { where: { completed: true }, select: { labStepId: true } },
+      },
+    }),
+    prisma.lab.findMany({
+      where: { status: 'PUBLISHED', enrollments: { none: { userId } } },
+      orderBy: { createdAt: 'desc' },
+      take: 3,
+      select: { id: true, title: true, slug: true, description: true, difficulty: true, _count: { select: { steps: true } } },
+    }),
+  ])
+
   return {
+    labs: {
+      enrollments: labEnrollments.map((e) => ({
+        id: e.id,
+        status: e.status,
+        completedAt: e.completedAt,
+        lab: { id: e.lab.id, title: e.lab.title, slug: e.lab.slug, difficulty: e.lab.difficulty },
+        // Only steps that still exist count, so deleting or adding steps never pushes progress past 100%.
+        progress: summarizeSteps(e.lab.steps, new Set(e.stepProgress.map((p) => p.labStepId))),
+      })),
+      explore: exploreLabs.map((l) => ({ id: l.id, title: l.title, slug: l.slug, description: l.description, difficulty: l.difficulty, stepCount: l._count.steps })),
+    },
     counts: {
       enrolled: enrollments.length,
       inProgress: enrollments.filter((e) => e.status === 'ACTIVE').length,

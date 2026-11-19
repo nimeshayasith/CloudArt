@@ -90,6 +90,15 @@ Modules share the database but not business logic.
 | `GET /admin/quizzes/:id/questions/export.xlsx` | admin | Excel: the question bank in the importable layout (includes the answer key) |
 | `GET /admin/question-template.xlsx` | admin | Excel: blank template with three worked examples and instructions |
 | `POST /admin/quizzes/:id/questions/import` | admin | Add questions from an uploaded `.xlsx` (raw request body, max 2 MB / 500 rows). All or nothing |
+| `GET/POST /admin/labs`, `GET/PATCH/DELETE /admin/labs/:id` | admin | Lab CRUD (list filters `q`, `status`); new labs start as `DRAFT`; delete only if nobody joined |
+| `POST /admin/labs/:id/steps`, `PUT /admin/labs/:id/steps/order` | admin | Add a step (title, instructions, required/optional); reorder |
+| `PATCH/DELETE /admin/lab-steps/:id` | admin | Edit or delete a step (delete refused once a student ticked it) |
+| `POST /admin/labs/:id/resources`, `PATCH/DELETE /admin/lab-resources/:id` | admin | Videos (YouTube) and links for the whole lab or one step |
+| `GET /admin/exports/labs/:id/progress.xlsx` | admin | Excel: every student's steps, status and completion date |
+| `GET /labs`, `GET /labs/:slug` | public | Catalog (`PUBLISHED` only) and overview: step titles and counts, never instructions, videos or links |
+| `GET /labs/:slug/enrollment`, `POST/DELETE /labs/:slug/enroll` | signed in | Join (idempotent) and leave a lab; ticked steps are kept |
+| `GET /labs/:slug/work` | joined | The workspace: instructions, videos, links and the student's ticks |
+| `PUT /labs/steps/:stepId/progress` | joined | Tick or untick a step (`{ completed }`); returns progress and the lab's status |
 | `GET/PUT /admin/courses/:id/exam-policy` | admin | Unlock rules: `requireAllLessons`, `requireModuleQuizzes`, `lessonWatchThresholdPct` (defaults apply when no row exists) |
 
 A disabled user is locked out immediately: the next API call returns `403 ACCOUNT_DISABLED`,
@@ -153,6 +162,23 @@ and the login screen shows the message without keeping a session.
 - Time limit, attempt limit, expiry, snapshotting and locking of used questions work exactly as for module quizzes.
 - There is no certificate yet.
 
+**Lab rules (Phase 9)**
+
+- A lab has ordered steps (instructions as plain text; a fenced block between `` ``` `` lines is shown as a code block with a
+  copy button, and everything is rendered as text, never as HTML) and resources attached to the lab or to one step.
+- **Resources:** `THEORY_VIDEO` / `HANDS_ON_VIDEO` hold a YouTube video id (links in any common form are accepted);
+  `DIAGRAM`, `PDF`, `LINK`, `OTHER` hold an external URL. Only `http(s)` URLs without credentials are accepted
+  (`javascript:`, `data:`, `file:` and the like are refused), and links open in a new tab with `noopener`. `DIAGRAM` and
+  `PDF` are links until S3 uploads exist; `NOTE` is not offered because instructions live on steps.
+- **Publish rule:** a lab can be `PUBLISHED` only with at least one step, and a published lab cannot lose its last step.
+  Labs students joined are archived, never deleted; steps students ticked cannot be deleted (edit them or make them optional).
+- **Privacy:** the public overview lists step titles and counts only. Instructions, video ids and links are returned only
+  to students who joined (`403 NOT_ENROLLED` otherwise). Archived labs stay open to students who already joined; drafts are closed.
+- **Completion:** a lab is `COMPLETED` when every *required* step is ticked (or every step, if none is required). The status
+  follows the ticks both ways: unticking a required step reopens it, and the first completion date is kept while it stays complete.
+  Progress counts only steps that currently exist, so adding or removing steps never pushes it past 100 %.
+- Labs have no quizzes or exams. Dashboard and exports reuse the same progress numbers.
+
 **Excel import and export (Phase 8)**
 
 - Exports are generated on demand with `exceljs`, sent as `attachment` with `Cache-Control: no-store` (they contain personal
@@ -186,7 +212,7 @@ and the login screen shows the message without keeping a session.
 5. Enrollment, YouTube player, resume-where-you-left-off — done
 6. Module quizzes + question management — done (Excel import/export is Phase 8)
 7. Final exam + locking — done
-8. Reports, Excel exports and question import  ← **this phase**
-9. CloudArt Labs
+8. Reports, Excel exports and question import — done
+9. CloudArt Labs  ← **this phase**
 10. Client service requests
 11. AWS production deployment

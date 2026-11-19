@@ -1,8 +1,10 @@
-import { Link } from 'react-router-dom'
+import { Link, NavLink } from 'react-router-dom'
 import { useAuth } from '../auth/AuthContext'
 import { homeFor } from '../auth/homeFor'
 
-/** Frame for pages anyone can open (course catalog and syllabus). */
+const navClass = ({ isActive }) => `px-3 py-1.5 rounded-full text-sm transition ${isActive ? 'bg-ca-gold/15 text-ca-gold' : 'text-ca-muted hover:text-ca-text'}`
+
+/** Frame for pages anyone can open (course and lab catalogs). */
 export default function PublicShell({ title, subtitle, children }) {
   const { user } = useAuth()
   return (
@@ -13,7 +15,8 @@ export default function PublicShell({ title, subtitle, children }) {
             Cloud<span className="text-ca-gold">Art</span>
           </Link>
           <nav aria-label="Main" className="flex items-center gap-1 flex-1">
-            <Link to="/courses" className="px-3 py-1.5 rounded-full text-sm bg-ca-gold/15 text-ca-gold">Courses</Link>
+            <NavLink to="/courses" className={navClass}>Courses</NavLink>
+            <NavLink to="/labs" className={navClass}>Labs</NavLink>
           </nav>
           <div className="ml-auto flex items-center gap-2 text-sm">
             {user ? (

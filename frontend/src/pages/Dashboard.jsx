@@ -70,6 +70,46 @@ export default function Dashboard() {
             )}
           </Panel>
 
+          <Panel title="My labs">
+            {data.labs.enrollments.length === 0 ? (
+              <p className="text-sm text-ca-muted">You haven’t started a lab yet. <Link to="/labs" className="text-ca-gold hover:underline">Try a hands-on lab</Link>.</p>
+            ) : (
+              <ul className="divide-y divide-white/10">
+                {data.labs.enrollments.map((e) => (
+                  <li key={e.id} className="py-3 flex flex-wrap items-center gap-x-4 gap-y-2" data-testid="lab-enrollment-row">
+                    <div className="min-w-0 flex-1 basis-56">
+                      <Link to={`/labs/${e.lab.slug}/work`} className="block text-ca-text font-medium truncate hover:text-ca-gold">{e.lab.title}</Link>
+                      <p className="text-xs text-ca-muted mt-0.5">Hands-on lab · {pretty(e.lab.difficulty)}</p>
+                      <div className="mt-2 flex items-center gap-2">
+                        <div role="progressbar" aria-label={`Progress in ${e.lab.title}`} aria-valuemin={0} aria-valuemax={100} aria-valuenow={e.progress.percent} className="h-1.5 flex-1 max-w-48 rounded-full bg-white/10 overflow-hidden">
+                          <div className="h-full rounded-full bg-ca-gold" style={{ width: `${e.progress.percent}%` }} />
+                        </div>
+                        <span className="text-xs text-ca-muted">{e.progress.completedSteps}/{e.progress.totalSteps} steps · {e.progress.percent}%</span>
+                      </div>
+                    </div>
+                    <span className={`shrink-0 text-xs border rounded-full px-2.5 py-0.5 ${STATUS_STYLE[e.status] ?? 'text-ca-muted border-white/20'}`}>{pretty(e.status)}</span>
+                    <Link to={`/labs/${e.lab.slug}/work`} aria-label={`Open lab ${e.lab.title}`} className="shrink-0 rounded-full bg-ca-gold text-ca-bg px-4 py-1.5 text-sm font-medium hover:bg-[#ffd47a]">Open</Link>
+                  </li>
+                ))}
+              </ul>
+            )}
+            {data.labs.explore.length > 0 && (
+              <div className="mt-4 border-t border-white/10 pt-4">
+                <p className="text-xs uppercase tracking-wider text-ca-muted mb-2">Labs to try</p>
+                <ul className="grid sm:grid-cols-3 gap-3">
+                  {data.labs.explore.map((l) => (
+                    <li key={l.id}>
+                      <Link to={`/labs/${l.slug}`} className="block h-full rounded-xl border border-white/10 p-3 hover:border-ca-gold/50 transition">
+                        <p className="text-sm text-ca-text font-medium">{l.title}</p>
+                        <p className="text-xs text-ca-muted mt-0.5">{pretty(l.difficulty)} · {l.stepCount} steps</p>
+                      </Link>
+                    </li>
+                  ))}
+                </ul>
+              </div>
+            )}
+          </Panel>
+
           <Panel title="Explore courses">
             {data.explore.length === 0 ? (
               <p className="text-sm text-ca-muted">New courses are on the way — check back soon.</p>

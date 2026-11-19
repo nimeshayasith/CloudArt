@@ -6,6 +6,7 @@ import { validateBody } from '../auth/auth.validation.js'
 import * as admin from './admin.service.js'
 import { exportRouter } from '../exports/export.routes.js'
 import { contentRouter } from './content.routes.js'
+import { labAdminRouter } from './lab.routes.js'
 import { quizAdminRouter } from './quiz.routes.js'
 
 export const adminRouter = Router()
@@ -13,6 +14,7 @@ adminRouter.use(requireAuth, requireAdmin)
 adminRouter.use(contentRouter)
 adminRouter.use(quizAdminRouter)
 adminRouter.use(exportRouter)
+adminRouter.use(labAdminRouter)
 
 const wrap = (fn) => (req, res, next) => fn(req, res).catch(next)
 

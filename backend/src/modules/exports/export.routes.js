@@ -10,6 +10,7 @@ export const exportRouter = Router()
 
 const course = idParam('COURSE_NOT_FOUND', 'Course not found')
 const quiz = idParam('QUIZ_NOT_FOUND', 'Quiz not found')
+const lab = idParam('LAB_NOT_FOUND', 'Lab not found')
 
 const download = (build) => handle(async (req, res) => {
   const { wb, filename } = await build(req)
@@ -18,6 +19,7 @@ const download = (build) => handle(async (req, res) => {
 
 exportRouter.get('/exports/users.xlsx', download(() => exports_.usersWorkbook()))
 exportRouter.get('/exports/courses/:id/progress.xlsx', course, download((req) => exports_.courseProgressWorkbook(req.params.id)))
+exportRouter.get('/exports/labs/:id/progress.xlsx', lab, download((req) => exports_.labProgressWorkbook(req.params.id)))
 exportRouter.get('/exports/quizzes/:id/results.xlsx', quiz, download((req) => exports_.quizResultsWorkbook(req.params.id)))
 exportRouter.get('/quizzes/:id/questions/export.xlsx', quiz, download((req) => exports_.questionBankWorkbook(req.params.id)))
 exportRouter.get('/question-template.xlsx', download(async () => exports_.questionTemplateWorkbook()))

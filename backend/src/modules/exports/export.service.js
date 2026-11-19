@@ -129,6 +129,59 @@ export async function courseProgressWorkbook(courseId) {
   return { wb, filename: `cloudart-progress-${fileSlug(course.slug, 'course')}-${today()}.xlsx` }
 }
 
+// ───────────────────────────── lab progress ─────────────────────────────
+
+export async function labProgressWorkbook(labId) {
+  const lab = await prisma.lab.findUnique({
+    where: { id: labId },
+    select: { id: true, title: true, slug: true, steps: { select: { id: true, isRequired: true } } },
+  })
+  if (!lab) throw new HttpError(404, 'LAB_NOT_FOUND', 'Lab not found')
+  const enrollments = await prisma.labEnrollment.findMany({
+    where: { labId },
+    orderBy: { enrolledAt: 'asc' },
+    select: {
+      status: true,
+      enrolledAt: true,
+      completedAt: true,
+      user: { select: { fullName: true, username: true, email: true, organization: { select: { name: true } } } },
+      stepProgress: { where: { completed: true }, select: { labStepId: true } },
+    },
+  })
+  const stepIds = new Set(lab.steps.map((st) => st.id))
+  const { wb } = buildSheet({
+    sheetName: 'Lab progress',
+    columns: [
+      { header: 'Full name', key: 'fullName', width: 26 },
+      { header: 'Username', key: 'username', width: 18 },
+      { header: 'Email', key: 'email', width: 32 },
+      { header: 'Organization', key: 'organization', width: 28 },
+      { header: 'Joined', key: 'joined', width: 14 },
+      { header: 'Status', key: 'status', width: 14 },
+      { header: 'Steps completed', key: 'done', width: 16 },
+      { header: 'Total steps', key: 'total', width: 12 },
+      { header: 'Progress %', key: 'percent', width: 12 },
+      { header: 'Completed on', key: 'completedOn', width: 16 },
+    ],
+    rows: enrollments.map((e) => {
+      const done = e.stepProgress.filter((p) => stepIds.has(p.labStepId)).length
+      return {
+        fullName: safeText(e.user.fullName),
+        username: safeText(e.user.username),
+        email: safeText(e.user.email),
+        organization: safeText(e.user.organization?.name),
+        joined: date(e.enrolledAt),
+        status: e.status === 'ACTIVE' ? 'In progress' : e.status === 'COMPLETED' ? 'Completed' : 'Left lab',
+        done,
+        total: stepIds.size,
+        percent: stepIds.size ? Math.round((done / stepIds.size) * 100) : 0,
+        completedOn: date(e.completedAt),
+      }
+    }),
+  })
+  return { wb, filename: `cloudart-lab-progress-${fileSlug(lab.slug, 'lab')}-${today()}.xlsx` }
+}
+
 // ───────────────────────────── quiz results ─────────────────────────────
 
 export async function quizResultsWorkbook(quizId) {

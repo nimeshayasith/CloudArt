@@ -17,11 +17,13 @@ export default function AppShell({ title, subtitle, children }) {
           <Link to="/" className="font-display font-bold text-xl text-ca-text" aria-label="CloudArt home">
             Cloud<span className="text-ca-gold">Art</span>
           </Link>
-          <nav aria-label="Main" className="flex items-center gap-1 order-3 w-full sm:order-none sm:w-auto sm:flex-1">
+          <nav aria-label="Main" className="flex flex-wrap items-center gap-1 order-3 w-full sm:order-none sm:w-auto sm:flex-1">
             {isAdmin && <NavLink to="/admin" end className={linkClass}>Admin</NavLink>}
             {isAdmin && <NavLink to="/admin/courses" className={linkClass}>Manage courses</NavLink>}
+            {isAdmin && <NavLink to="/admin/labs" className={linkClass}>Manage labs</NavLink>}
             <NavLink to="/dashboard" end className={linkClass}>My learning</NavLink>
             <NavLink to="/courses" className={linkClass}>Courses</NavLink>
+            <NavLink to="/labs" className={linkClass}>Labs</NavLink>
             <NavLink to="/dashboard/profile" className={linkClass}>Profile</NavLink>
           </nav>
           <div className="ml-auto flex items-center gap-3">
