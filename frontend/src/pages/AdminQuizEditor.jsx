@@ -112,13 +112,13 @@ function SettingsForm({ quiz, onSaved }) {
 const blankOptions = (type) => (type === 'TRUE_FALSE' ? [{ text: 'True', isCorrect: true }, { text: 'False', isCorrect: false }] : [{ text: '', isCorrect: true }, { text: '', isCorrect: false }, { text: '', isCorrect: false }])
 
 /** Create or edit a question. `onSubmit` throws an ApiError on failure. */
-function QuestionForm({ idPrefix, initial, submitLabel, onSubmit, onCancel }) {
+function QuestionForm({ idPrefix, initial, submitLabel, onSubmit, onCancel, defaultType = 'SINGLE_CHOICE' }) {
   const [form, setForm] = useState({
     questionText: initial?.questionText ?? '',
-    questionType: initial?.questionType ?? 'SINGLE_CHOICE',
+    questionType: initial?.questionType ?? defaultType,
     marks: String(initial?.marks ?? 1),
     explanation: initial?.explanation ?? '',
-    options: initial ? initial.options.map((o) => ({ text: o.text, isCorrect: o.isCorrect })) : blankOptions('SINGLE_CHOICE'),
+    options: initial ? initial.options.map((o) => ({ text: o.text, isCorrect: o.isCorrect })) : blankOptions(defaultType),
   })
   const [errors, setErrors] = useState({})
   const [formError, setFormError] = useState('')
@@ -395,7 +395,9 @@ export default function AdminQuizEditor() {
   if (!quiz) return <AppShell title="Edit quiz"><Loading label="Loading quiz…" /></AppShell>
 
   return (
-    <AppShell title={quiz.title} subtitle="Questions are drawn from this list. Correct answers are only shown to students after they submit.">
+    <AppShell title={quiz.title} subtitle={quiz.quizType === 'FINAL_EXAM'
+      ? 'Final exam. Each attempt draws its questions from this bank. Students never see the correct answers, even after submitting.'
+      : 'Questions are drawn from this list. Correct answers are only shown to students after they submit.'}>
       <Link to={`/admin/courses/${quiz.courseId}`} className="text-sm text-ca-muted hover:text-ca-gold">← Back to the course</Link>
 
       <div className="mt-4 space-y-6">
@@ -443,6 +445,7 @@ export default function AdminQuizEditor() {
           {adding ? (
             <QuestionForm
               idPrefix="new-q"
+              defaultType={quiz.quizType === 'FINAL_EXAM' ? 'MULTIPLE_SELECT' : 'SINGLE_CHOICE'}
               submitLabel="Add question"
               onCancel={() => setAdding(false)}
               onSubmit={async (body) => { await authedApi(`/admin/quizzes/${id}/questions`, { method: 'POST', body }); setAdding(false); await act(null) }}

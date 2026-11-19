@@ -1,5 +1,6 @@
 import { prisma } from '../../config/prisma.js'
 import { HttpError } from '../../shared/httpError.js'
+import { examEligibility } from './exam.service.js'
 
 /** Students may keep learning from a course an admin has since archived; drafts are closed. */
 export const LEARNABLE = ['PUBLISHED', 'ARCHIVED']
@@ -154,6 +155,7 @@ export async function courseForLearning(userId, slug) {
     enrollment,
     progress: summarizeProgress(lessons, byLesson),
     resume: pickResume(lessons, byLesson),
+    exam: await examOutline(enrollment.id, course.id),
     modules: course.modules.map((m) => ({
       id: m.id,
       title: m.title,
@@ -173,6 +175,17 @@ export async function courseForLearning(userId, slug) {
       }),
     })),
   }
+}
+
+/** The course's final exam as this student sees it: standing, and whether it is still locked and why. */
+async function examOutline(enrollmentId, courseId) {
+  const exam = await prisma.quiz.findFirst({
+    where: { courseId, quizType: 'FINAL_EXAM', status: 'PUBLISHED' },
+    select: { id: true, title: true, totalQuestions: true, durationMinutes: true, passPercentage: true, maxAttempts: true, _count: { select: { questions: { where: { isActive: true } } } } },
+  })
+  if (!exam) return null
+  const [standings, eligibility] = await Promise.all([quizStandings(enrollmentId, [{ quizzes: [exam] }]), examEligibility(enrollmentId, courseId)])
+  return { ...quizOutline(exam, standings.get(exam.id)), locked: !eligibility.eligible, requirements: eligibility.requirements }
 }
 
 function quizOutline(q, standing) {

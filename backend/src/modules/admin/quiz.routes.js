@@ -55,6 +55,17 @@ const questionUpdate = atLeastOne(
     .strict(),
 )
 
+const examCreate = z.object({ ...Object.fromEntries(Object.entries({ title, description }).map(([k, v]) => [k, v.optional()])), ...Object.fromEntries(Object.entries(settings).map(([k, v]) => [k, v.optional()])) }).strict()
+const policyBody = atLeastOne(
+  z
+    .object({
+      requireAllLessons: z.boolean().optional(),
+      requireModuleQuizzes: z.boolean().optional(),
+      lessonWatchThresholdPct: z.number({ message: 'Enter a percentage' }).int('Use a whole number').min(1, 'Between 1 and 100').max(100, 'Between 1 and 100').optional(),
+    })
+    .strict(),
+)
+
 const orderBody = z.object({ ids: z.array(z.string().uuid()).min(1).max(1000) }).strict()
 const attemptsQuery = z.object({ page: z.coerce.number().int().min(1).default(1), pageSize: z.coerce.number().int().min(1).max(50).default(20) })
 
@@ -64,6 +75,16 @@ const quiz = idParam('QUIZ_NOT_FOUND', 'Quiz not found')
 const question = idParam('QUESTION_NOT_FOUND', 'Question not found')
 
 quizAdminRouter.get('/courses/:id/quizzes', course, handle(async (req, res) => res.json({ quizzes: await quizzes.listCourseQuizzes(req.params.id) })))
+
+quizAdminRouter.post('/courses/:id/final-exam', course, validateBody(examCreate), handle(async (req, res) => {
+  res.status(201).json({ quiz: await quizzes.createFinalExam(req.params.id, req.body) })
+}))
+
+quizAdminRouter.get('/courses/:id/exam-policy', course, handle(async (req, res) => res.json({ policy: await quizzes.getExamPolicy(req.params.id) })))
+
+quizAdminRouter.put('/courses/:id/exam-policy', course, validateBody(policyBody), handle(async (req, res) => {
+  res.json({ policy: await quizzes.setExamPolicy(req.params.id, req.body) })
+}))
 
 quizAdminRouter.post('/modules/:id/quiz', mod, validateBody(quizCreate), handle(async (req, res) => {
   res.status(201).json({ quiz: await quizzes.createModuleQuiz(req.params.id, req.body) })

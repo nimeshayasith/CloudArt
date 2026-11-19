@@ -60,12 +60,14 @@ const courseShape = (c) => ({
   createdAt: c.createdAt,
   updatedAt: c.updatedAt,
   ...(c.modules ? { modules: c.modules.map(moduleShape) } : {}),
+  ...(c.quizzes ? { finalExam: c.quizzes[0] ? { id: c.quizzes[0].id, title: c.quizzes[0].title, status: c.quizzes[0].status, questionCount: c.quizzes[0]._count.questions } : null } : {}),
   ...(c._count ? { moduleCount: c._count.modules, enrollmentCount: c._count.enrollments } : {}),
 })
 
 const orderBy = [{ sortOrder: 'asc' }, { createdAt: 'asc' }]
 const moduleQuiz = { where: { quizType: 'MODULE_QUIZ' }, select: { id: true, title: true, status: true, _count: { select: { questions: true } } } }
-const fullTree = { category: true, modules: { orderBy, include: { lessons: { orderBy }, quizzes: moduleQuiz } } }
+const finalExamSelect = { where: { quizType: 'FINAL_EXAM' }, select: { id: true, title: true, status: true, _count: { select: { questions: true } } } }
+const fullTree = { category: true, quizzes: finalExamSelect, modules: { orderBy, include: { lessons: { orderBy }, quizzes: moduleQuiz } } }
 
 async function loadCourse(id) {
   const course = await prisma.course.findUnique({ where: { id }, include: fullTree })
@@ -125,7 +127,7 @@ export async function createCourse(adminId, input) {
   await requireCategory(input.categoryId)
   const slug = await uniqueCourseSlug(input.title)
   try {
-    const course = await prisma.course.create({
+    const { id } = await prisma.course.create({
       data: {
         title: input.title,
         slug,
@@ -135,9 +137,9 @@ export async function createCourse(adminId, input) {
         isFree: input.isFree ?? true,
         createdById: adminId,
       },
-      include: fullTree,
+      select: { id: true },
     })
-    return courseShape(course)
+    return courseShape(await loadCourse(id)) // write, then read: one Prisma call with a deep include opens a transaction
   } catch (err) {
     if (err.code === 'P2002') throw new HttpError(409, 'SLUG_TAKEN', 'A course with a very similar title was just created — try again')
     throw err
@@ -149,8 +151,8 @@ export async function updateCourse(id, input) {
   if (!existing) throw notFound('course')
   if (input.categoryId) await requireCategory(input.categoryId)
   if (input.status === 'PUBLISHED' && !(await isReady(prisma, id))) throw notReady()
-  const course = await prisma.course.update({ where: { id }, data: input, include: fullTree })
-  return courseShape(course)
+  await prisma.course.update({ where: { id }, data: input })
+  return courseShape(await loadCourse(id))
 }
 
 /** Courses with enrollments are archived, never deleted: students keep their history. */

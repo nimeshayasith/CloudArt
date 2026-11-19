@@ -23,6 +23,7 @@ function Review({ attempt }) {
             {result.expired && <p className="text-sm text-amber-300">Time ran out, so your saved answers were submitted.</p>}
           </div>
         </div>
+        {attempt.keyHidden && <p className="mt-4 text-sm text-ca-muted">The correct answers for the final exam are not shown, so the question bank stays fair for everyone.</p>}
         <div className="mt-5 flex flex-wrap items-center gap-3">
           <Link to={`/quiz/${attempt.quizId}`} className="rounded-full bg-ca-gold text-ca-bg px-5 py-2 text-sm font-medium hover:bg-[#ffd47a]">{result.passed ? 'Quiz details' : 'Try again'}</Link>
           <Link to={`/learn/${attempt.courseSlug}`} className="text-sm text-ca-muted hover:text-ca-gold">Back to the course</Link>
@@ -43,12 +44,14 @@ function Review({ attempt }) {
                 <ul className="mt-2 space-y-1">
                   {q.options.map((o) => {
                     const chosen = q.selectedOptionIds.includes(o.id)
-                    const tone = o.isCorrect ? 'border-emerald-400/40 text-emerald-200' : chosen ? 'border-red-400/40 text-red-200' : 'border-white/10 text-ca-muted'
+                    const tone = attempt.keyHidden
+                      ? (chosen ? 'border-ca-gold/50 text-ca-text' : 'border-white/10 text-ca-muted')
+                      : o.isCorrect ? 'border-emerald-400/40 text-emerald-200' : chosen ? 'border-red-400/40 text-red-200' : 'border-white/10 text-ca-muted'
                     return (
                       <li key={o.id} className={`rounded-lg border px-3 py-1.5 text-sm ${tone}`}>
                         {o.text}
                         {o.isCorrect && <span className="ml-2 text-xs">✓ correct answer</span>}
-                        {chosen && <span className="ml-2 text-xs">{o.isCorrect ? '(your answer)' : '✗ your answer'}</span>}
+                        {chosen && <span className="ml-2 text-xs">{attempt.keyHidden || o.isCorrect ? '(your answer)' : '✗ your answer'}</span>}
                       </li>
                     )
                   })}

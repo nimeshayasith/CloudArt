@@ -1,5 +1,6 @@
 import { prisma } from '../../config/prisma.js'
 import { HttpError } from '../../shared/httpError.js'
+import { DEFAULT_POLICY, getPolicy } from '../learning/exam.service.js'
 import { questionProblem } from '../quizzes/quiz.rules.js'
 
 const notFound = (what) => new HttpError(404, `${what.toUpperCase()}_NOT_FOUND`, `${what[0].toUpperCase()}${what.slice(1)} not found`)
@@ -91,6 +92,39 @@ export async function createModuleQuiz(moduleId, input) {
     },
   })
   return quizShape(quiz, { questions: [], activeQuestions: 0, attemptCount: 0 })
+}
+
+/** One final exam per course: 65 questions, 90 minutes and 3 attempts unless the admin says otherwise. */
+export async function createFinalExam(courseId, input) {
+  const course = await prisma.course.findUnique({ where: { id: courseId }, select: { id: true, title: true } })
+  if (!course) throw notFound('course')
+  if (await prisma.quiz.findFirst({ where: { courseId, quizType: 'FINAL_EXAM' }, select: { id: true } })) {
+    throw new HttpError(409, 'EXAM_EXISTS', 'This course already has a final exam')
+  }
+  const quiz = await prisma.quiz.create({
+    data: {
+      courseId,
+      moduleId: null,
+      quizType: 'FINAL_EXAM',
+      title: input.title ?? `${course.title} final exam`,
+      description: input.description ?? '',
+      totalQuestions: input.totalQuestions ?? 65,
+      durationMinutes: input.durationMinutes === undefined ? 90 : input.durationMinutes,
+      passPercentage: input.passPercentage ?? 70,
+      maxAttempts: input.maxAttempts === undefined ? 3 : input.maxAttempts,
+      shuffleQuestions: input.shuffleQuestions ?? true,
+    },
+  })
+  return quizShape(quiz, { questions: [], activeQuestions: 0, attemptCount: 0 })
+}
+
+export const getExamPolicy = (courseId) => getPolicy(courseId)
+
+export async function setExamPolicy(courseId, input) {
+  if (!(await prisma.course.findUnique({ where: { id: courseId }, select: { id: true } }))) throw notFound('course')
+  const data = { ...DEFAULT_POLICY, ...(await getPolicy(courseId)), ...input }
+  await prisma.examPolicy.upsert({ where: { courseId }, create: { courseId, ...data }, update: data })
+  return getPolicy(courseId)
 }
 
 export async function getQuiz(id) {

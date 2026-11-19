@@ -1,6 +1,7 @@
 import { prisma } from '../../config/prisma.js'
 import { HttpError } from '../../shared/httpError.js'
 import { drawQuestions, gradeAttempt } from '../quizzes/quiz.rules.js'
+import { examEligibility } from './exam.service.js'
 import { LEARNABLE, activeEnrollment, notEnrolled } from './learning.service.js'
 
 /** A save or submit that arrives a few seconds after the deadline (network delay) is still honoured. */
@@ -11,10 +12,15 @@ const attemptNotFound = () => new HttpError(404, 'ATTEMPT_NOT_FOUND', 'Attempt n
 const num = (d) => (d === null || d === undefined ? null : Number(d))
 const isOverdue = (attempt) => attempt.status === 'IN_PROGRESS' && attempt.expiresAt && Date.now() > attempt.expiresAt.getTime() + GRACE_MS
 
-/** A published module quiz in a course the student can still learn from. */
+/** A published module quiz or final exam in a course the student can still learn from. */
 async function liveQuiz(quizId) {
   const quiz = await prisma.quiz.findFirst({
-    where: { id: quizId, status: 'PUBLISHED', quizType: 'MODULE_QUIZ', module: { isPublished: true }, course: { status: { in: LEARNABLE } } },
+    where: {
+      id: quizId,
+      status: 'PUBLISHED',
+      course: { status: { in: LEARNABLE } },
+      OR: [{ quizType: 'MODULE_QUIZ', module: { isPublished: true } }, { quizType: 'FINAL_EXAM' }],
+    },
     include: { course: { select: { slug: true, title: true } }, module: { select: { title: true } }, _count: { select: { questions: { where: { isActive: true } } } } },
   })
   if (!quiz) throw quizNotFound()
@@ -34,28 +40,34 @@ async function enrolledIn(userId, quiz) {
  * (the status flip is conditional), so two racing submits can never grade twice.
  */
 async function closeAttempt(attemptId, status) {
+  // Everything is read first, outside the transaction, which then only does plain writes. Racing closers are
+  // still safe because the status flip below is conditional: exactly one of them wins.
+  const attempt = await prisma.quizAttempt.findUnique({ where: { id: attemptId }, include: { quiz: { select: { passPercentage: true, quizType: true } } } })
+  if (!attempt || attempt.status !== 'IN_PROGRESS') return
+
+  const rows = await prisma.attemptQuestion.findMany({
+    where: { attemptId },
+    orderBy: { position: 'asc' },
+    include: { question: { select: { id: true, marks: true, options: { select: { id: true, isCorrect: true } } } } },
+  })
+  const saved = await prisma.attemptAnswer.findMany({ where: { attemptId } })
+  const answers = new Map(saved.map((a) => [a.questionId, a.selectedOptionIds]))
+  const result = gradeAttempt(
+    rows.map((r) => ({ id: r.questionId, marks: r.question.marks, correctOptionIds: r.question.options.filter((o) => o.isCorrect).map((o) => o.id) })),
+    answers,
+    attempt.quiz.passPercentage,
+  )
+
   await prisma.$transaction(async (tx) => {
-    const attempt = await tx.quizAttempt.findUnique({ where: { id: attemptId }, include: { quiz: { select: { passPercentage: true } } } })
-    if (!attempt || attempt.status !== 'IN_PROGRESS') return
-
-    const rows = await tx.attemptQuestion.findMany({
-      where: { attemptId },
-      orderBy: { position: 'asc' },
-      include: { question: { select: { id: true, marks: true, options: { select: { id: true, isCorrect: true } } } } },
-    })
-    const saved = await tx.attemptAnswer.findMany({ where: { attemptId } })
-    const answers = new Map(saved.map((a) => [a.questionId, a.selectedOptionIds]))
-    const result = gradeAttempt(
-      rows.map((r) => ({ id: r.questionId, marks: r.question.marks, correctOptionIds: r.question.options.filter((o) => o.isCorrect).map((o) => o.id) })),
-      answers,
-      attempt.quiz.passPercentage,
-    )
-
     const claimed = await tx.quizAttempt.updateMany({
       where: { id: attemptId, status: 'IN_PROGRESS' },
       data: { status, submittedAt: new Date(), score: result.score, percentage: result.percentage, passed: result.passed },
     })
     if (claimed.count === 0) return
+    // Passing the final exam is what completes the course.
+    if (attempt.quiz.quizType === 'FINAL_EXAM' && result.passed) {
+      await tx.enrollment.updateMany({ where: { id: attempt.enrollmentId, status: 'ACTIVE' }, data: { status: 'COMPLETED' } })
+    }
     for (const q of result.perQuestion) {
       await tx.attemptAnswer.upsert({
         where: { attemptId_questionId: { attemptId, questionId: q.questionId } },
@@ -92,8 +104,11 @@ export async function quizSummary(userId, quizId) {
   const attempts = await prisma.quizAttempt.findMany({ where: { quizId, enrollmentId: enrollment.id }, orderBy: { attemptNumber: 'desc' } })
   const finished = attempts.filter((a) => a.status !== 'IN_PROGRESS')
   const open = attempts.find((a) => a.status === 'IN_PROGRESS')
+  const isExam = quiz.quizType === 'FINAL_EXAM'
   return {
+    eligibility: isExam ? await examEligibility(enrollment.id, quiz.courseId) : null,
     quiz: {
+      type: quiz.quizType,
       id: quiz.id,
       title: quiz.title,
       description: quiz.description,
@@ -125,6 +140,7 @@ export async function attemptView(userId, attemptId) {
     attempt = await loadOwnedAttempt(userId, attemptId)
   }
   const open = attempt.status === 'IN_PROGRESS'
+  const keyHidden = attempt.quiz.quizType === 'FINAL_EXAM' // the exam bank is not revealed, even after submitting
   const answers = new Map(attempt.answers.map((a) => [a.questionId, a]))
 
   const questions = attempt.questions.map(({ question: q }) => {
@@ -137,9 +153,11 @@ export async function attemptView(userId, attemptId) {
       selectedOptionIds: answer?.selectedOptionIds ?? [],
     }
     if (open) return { ...base, options: q.options.map((o) => ({ id: o.id, text: o.optionText })) }
+    const awardedMarks = num(answer?.awardedMarks) ?? 0
+    if (keyHidden) return { ...base, awardedMarks, options: q.options.map((o) => ({ id: o.id, text: o.optionText })) }
     return {
       ...base,
-      awardedMarks: num(answer?.awardedMarks) ?? 0,
+      awardedMarks,
       explanation: q.explanation ?? '',
       options: q.options.map((o) => ({ id: o.id, text: o.optionText, isCorrect: o.isCorrect })),
     }
@@ -149,6 +167,8 @@ export async function attemptView(userId, attemptId) {
     id: attempt.id,
     quizId: attempt.quizId,
     quizTitle: attempt.quiz.title,
+    quizType: attempt.quiz.quizType,
+    keyHidden,
     courseSlug: attempt.quiz.course.slug,
     status: attempt.status,
     attemptNumber: attempt.attemptNumber,
@@ -165,7 +185,7 @@ async function loadOwnedAttempt(userId, attemptId) {
   const attempt = await prisma.quizAttempt.findFirst({
     where: { id: attemptId, enrollment: { userId } },
     include: {
-      quiz: { select: { title: true, passPercentage: true, course: { select: { slug: true } } } },
+      quiz: { select: { title: true, quizType: true, passPercentage: true, course: { select: { slug: true } } } },
       questions: {
         orderBy: { position: 'asc' },
         include: {
@@ -203,6 +223,11 @@ export async function startAttempt(userId, quizId) {
     if (open) {
       if (!isOverdue(open)) return { attempt: await attemptView(userId, open.id), resumed: true }
       await closeAttempt(open.id, 'EXPIRED')
+    }
+
+    if (quiz.quizType === 'FINAL_EXAM') {
+      const { eligible, requirements } = await examEligibility(enrollment.id, quiz.courseId)
+      if (!eligible) throw new HttpError(403, 'EXAM_LOCKED', 'Finish the requirements below to unlock the final exam', { requirements })
     }
 
     const finished = await prisma.quizAttempt.count({ where: { quizId, enrollmentId: enrollment.id, status: { not: 'IN_PROGRESS' } } })

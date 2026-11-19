@@ -298,6 +298,102 @@ function AddModule({ courseId, act }) {
   )
 }
 
+// ───────────────────────────── final exam ─────────────────────────────
+
+function FinalExamPanel({ course, act }) {
+  const navigate = useNavigate()
+  const [policy, setPolicy] = useState(null)
+  const [form, setForm] = useState(null)
+  const [error, setError] = useState('')
+  const [saved, setSaved] = useState(false)
+  const [busy, setBusy] = useState(false)
+
+  useEffect(() => {
+    let stale = false
+    authedApi(`/admin/courses/${course.id}/exam-policy`)
+      .then((d) => {
+        if (stale) return
+        setPolicy(d.policy)
+        setForm({ ...d.policy, lessonWatchThresholdPct: String(d.policy.lessonWatchThresholdPct) })
+      })
+      .catch((e) => !stale && setError(e.message))
+    return () => { stale = true }
+  }, [course.id])
+
+  const savePolicy = async (e) => {
+    e.preventDefault()
+    setError('')
+    setSaved(false)
+    const pct = Number(form.lessonWatchThresholdPct)
+    if (!Number.isInteger(pct) || pct < 1 || pct > 100) return setError('The watch threshold must be a whole number from 1 to 100')
+    setBusy(true)
+    try {
+      const d = await authedApi(`/admin/courses/${course.id}/exam-policy`, {
+        method: 'PUT',
+        body: { requireAllLessons: form.requireAllLessons, requireModuleQuizzes: form.requireModuleQuizzes, lessonWatchThresholdPct: pct },
+      })
+      setPolicy(d.policy)
+      setSaved(true)
+    } catch (ex) {
+      setError(ex.message)
+    } finally {
+      setBusy(false)
+    }
+  }
+
+  const createExam = async () => {
+    let id = null
+    const ok = await act(async () => { id = (await authedApi(`/admin/courses/${course.id}/final-exam`, { method: 'POST', body: {} })).quiz.id })
+    if (ok && id) navigate(`/admin/quizzes/${id}`)
+  }
+
+  const exam = course.finalExam
+  return (
+    <Panel title="Final exam" action={exam && <StatusBadge status={exam.status} />}>
+      <div className="space-y-6">
+        <div data-testid="final-exam">
+          {exam ? (
+            <div className="flex flex-wrap items-center gap-3">
+              <span className="text-sm text-ca-text">{exam.title}</span>
+              <span className="text-xs text-ca-muted">{plural(exam.questionCount, 'question')} in the bank</span>
+              <Link to={`/admin/quizzes/${exam.id}`} className={smallBtn}>Manage final exam</Link>
+            </div>
+          ) : (
+            <div className="space-y-2">
+              <p className="text-sm text-ca-muted">No final exam yet. It starts with 65 questions per attempt, a 90 minute limit and 3 attempts, which you can change.</p>
+              <button type="button" onClick={createExam} className={goldBtn}>Create final exam</button>
+            </div>
+          )}
+        </div>
+
+        <form onSubmit={savePolicy} noValidate className="space-y-3 border-t border-white/10 pt-5" aria-label="Exam unlock rules">
+          <h3 className="font-display font-semibold text-ca-text">Unlock rules</h3>
+          <p className="text-sm text-ca-muted">The final exam stays locked for a student until every ticked rule is met.</p>
+          {saved && <p role="status" className="rounded-lg border border-emerald-500/40 bg-emerald-500/10 px-3.5 py-2.5 text-sm text-emerald-300">Unlock rules saved.</p>}
+          {error && <p role="alert" className="text-sm text-red-300">{error}</p>}
+          {!form && !error && <p role="status" className="text-sm text-ca-muted font-mono">Loading rules…</p>}
+          {form && (
+            <>
+              <label className="flex items-center gap-2 text-sm text-ca-text">
+                <input type="checkbox" checked={form.requireAllLessons} onChange={(e) => { setSaved(false); setForm((f) => ({ ...f, requireAllLessons: e.target.checked })) }} />
+                The student must complete every lesson
+              </label>
+              <label className="flex items-center gap-2 text-sm text-ca-text">
+                <input type="checkbox" checked={form.requireModuleQuizzes} onChange={(e) => { setSaved(false); setForm((f) => ({ ...f, requireModuleQuizzes: e.target.checked })) }} />
+                The student must pass every module quiz
+              </label>
+              <Field label="A lesson counts as complete after watching (%)" id="exam-threshold" hint="Applies to every lesson in this course.">
+                <input id="exam-threshold" type="number" min="1" max="100" className={`${inputClass} max-w-32`} value={form.lessonWatchThresholdPct} onChange={(e) => { setSaved(false); setForm((f) => ({ ...f, lessonWatchThresholdPct: e.target.value })) }} />
+              </Field>
+              <button type="submit" disabled={busy || !policy} className={goldBtn}>{busy ? 'Saving…' : 'Save unlock rules'}</button>
+            </>
+          )}
+        </form>
+      </div>
+    </Panel>
+  )
+}
+
 // ───────────────────────────── page ─────────────────────────────
 
 export default function AdminCourseEditor() {
@@ -417,6 +513,8 @@ export default function AdminCourseEditor() {
           </ul>
           <AddModule courseId={id} act={act} />
         </Panel>
+
+        <FinalExamPanel course={course} act={act} />
       </div>
     </AppShell>
   )

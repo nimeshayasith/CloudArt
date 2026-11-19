@@ -32,7 +32,7 @@ export default function Quiz() {
     } catch (e) {
       setStartError(e.message)
       setStarting(false)
-      if (e.code === 'NO_ATTEMPTS_LEFT') setReloadKey((k) => k + 1)
+      if (e.code === 'NO_ATTEMPTS_LEFT' || e.code === 'EXAM_LOCKED') setReloadKey((k) => k + 1)
     }
   }
 
@@ -46,6 +46,8 @@ export default function Quiz() {
   if (!data) return <AppShell title="Quiz"><Loading label="Loading quiz…" /></AppShell>
 
   const { quiz } = data
+  const locked = data.eligibility && !data.eligibility.eligible
+  const isExam = quiz.type === 'FINAL_EXAM'
   const noneLeft = data.attemptsLeft === 0
   const label = data.inProgressAttemptId ? 'Resume quiz' : data.attemptsUsed > 0 ? 'Try again' : 'Start quiz'
 
@@ -61,17 +63,31 @@ export default function Quiz() {
               <li>Pass mark: {quiz.passPercentage}%</li>
               <li>{quiz.durationMinutes ? `Time limit: ${quiz.durationMinutes} minutes. The quiz submits itself when time runs out.` : 'No time limit'}</li>
               <li>{quiz.maxAttempts ? `${plural(quiz.maxAttempts, 'attempt')} allowed${data.attemptsLeft !== null ? ` (${data.attemptsLeft} left)` : ''}` : 'Unlimited attempts'}</li>
-              <li>Your answers save as you go, and correct answers appear after you submit.</li>
+              <li>{isExam ? 'Your answers save as you go. The correct answers are not shown after the exam.' : 'Your answers save as you go, and correct answers appear after you submit.'}</li>
             </ul>
+            {locked && (
+              <div className="mt-4 rounded-xl border border-white/10 p-4" data-testid="exam-locked">
+                <p className="text-sm text-ca-text"><span aria-hidden="true">🔒</span> The final exam is locked. Finish these first:</p>
+                <ul className="mt-2 space-y-1.5">
+                  {data.eligibility.requirements.map((r) => (
+                    <li key={r.key} className="flex items-start gap-2 text-sm">
+                      <span aria-hidden="true" className={r.met ? 'text-emerald-300' : 'text-ca-muted'}>{r.met ? '✓' : '○'}</span>
+                      <span className={r.met ? 'text-ca-text' : 'text-ca-muted'}>{r.label} <span className="text-xs">({r.detail})</span></span>
+                    </li>
+                  ))}
+                </ul>
+                <Link to={`/learn/${quiz.courseSlug}`} className="mt-3 inline-block text-sm text-ca-gold hover:underline">Back to the course</Link>
+              </div>
+            )}
             <p role="alert" className="mt-3 text-sm text-red-300">{startError}</p>
             <div className="mt-4">
               <button
                 type="button"
-                disabled={starting || (noneLeft && !data.inProgressAttemptId)}
+                disabled={starting || locked || (noneLeft && !data.inProgressAttemptId)}
                 onClick={data.inProgressAttemptId ? () => navigate(`/attempt/${data.inProgressAttemptId}`) : start}
                 className="rounded-full bg-ca-gold text-ca-bg px-6 py-2.5 text-sm font-semibold hover:bg-[#ffd47a] disabled:opacity-60"
               >
-                {starting ? 'Starting…' : noneLeft && !data.inProgressAttemptId ? 'No attempts left' : label}
+                {starting ? 'Starting…' : locked ? 'Locked' : noneLeft && !data.inProgressAttemptId ? 'No attempts left' : label}
               </button>
             </div>
           </Panel>

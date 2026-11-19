@@ -44,6 +44,50 @@ function LeaveCourse({ slug }) {
   )
 }
 
+function Requirements({ requirements }) {
+  return (
+    <ul className="space-y-1.5" aria-label="Requirements">
+      {requirements.map((r) => (
+        <li key={r.key} className="flex items-start gap-2 text-sm">
+          <span aria-hidden="true" className={r.met ? 'text-emerald-300' : 'text-ca-muted'}>{r.met ? '✓' : '○'}</span>
+          <span className={r.met ? 'text-ca-text' : 'text-ca-muted'}>
+            {r.label}
+            <span className="block text-xs text-ca-muted">{r.detail}{r.met ? '' : ' (not yet)'}</span>
+          </span>
+        </li>
+      ))}
+    </ul>
+  )
+}
+
+function ExamCard({ exam }) {
+  return (
+    <Panel title="Final exam">
+      <div data-testid="exam-card">
+        <p className="text-sm text-ca-text">{exam.title}</p>
+        <p className="mt-0.5 text-xs text-ca-muted">
+          {plural(exam.questionCount, 'question')} · pass mark {exam.passPercentage}%{exam.durationMinutes ? ` · ${exam.durationMinutes} min` : ''}
+        </p>
+        {exam.locked ? (
+          <div className="mt-3 space-y-3">
+            <p className="text-sm text-ca-muted"><span aria-hidden="true">🔒</span> Locked. Finish these to unlock it:</p>
+            <Requirements requirements={exam.requirements} />
+          </div>
+        ) : (
+          <div className="mt-3 space-y-2">
+            {exam.passed && <p className="text-sm text-emerald-300">Passed with {exam.bestPercentage}% ✓</p>}
+            {!exam.passed && exam.bestPercentage !== null && <p className="text-sm text-ca-muted">Best score: {exam.bestPercentage}%</p>}
+            {exam.maxAttempts !== null && <p className="text-xs text-ca-muted">{exam.attemptsLeft} of {plural(exam.maxAttempts, 'attempt')} left</p>}
+            <Link to={`/quiz/${exam.id}`} className="inline-block rounded-full bg-ca-gold text-ca-bg px-4 py-1.5 text-sm font-medium hover:bg-[#ffd47a]">
+              {exam.inProgress ? 'Resume exam' : exam.attemptsUsed > 0 ? 'Exam details' : 'Start the final exam'}
+            </Link>
+          </div>
+        )}
+      </div>
+    </Panel>
+  )
+}
+
 export default function Learn() {
   const { slug } = useParams()
   const [params] = useSearchParams()
@@ -146,6 +190,11 @@ export default function Learn() {
 
   return (
     <AppShell title={outline.course.title} subtitle="Pick up right where you left off.">
+      {outline.enrollment.status === 'COMPLETED' && (
+        <p role="status" className="mb-4 rounded-lg border border-emerald-500/40 bg-emerald-500/10 px-4 py-3 text-sm text-emerald-300" data-testid="course-completed">
+          🎓 You’ve completed this course by passing the final exam. You can keep watching any lesson.
+        </p>
+      )}
       <div className="grid lg:grid-cols-[1fr_20rem] gap-6 items-start">
         <div className="space-y-4 min-w-0">
           {flat.length === 0 && <Panel title="No lessons yet"><p className="text-sm text-ca-muted">This course doesn’t have published lessons yet. Check back soon.</p></Panel>}
@@ -225,6 +274,7 @@ export default function Learn() {
               ))}
             </ol>
           </Panel>
+          {outline.exam && <ExamCard exam={outline.exam} />}
           <LeaveCourse slug={slug} />
         </aside>
       </div>

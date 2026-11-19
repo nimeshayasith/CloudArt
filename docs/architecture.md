@@ -83,6 +83,8 @@ Modules share the database but not business logic.
 | `GET /learn/attempts/:attemptId` | owner | The attempt: questions without the key while open; with key and explanations once finished |
 | `PUT /learn/attempts/:attemptId/answers` | owner | Autosave answers (120 requests/min per user) |
 | `POST /learn/attempts/:attemptId/submit` | owner | Submit (optionally with the final answers); idempotent |
+| `POST /admin/courses/:id/final-exam` | admin | Create the course's final exam (one per course; defaults 65 questions, 90 min, 3 attempts, 70 %) |
+| `GET/PUT /admin/courses/:id/exam-policy` | admin | Unlock rules: `requireAllLessons`, `requireModuleQuizzes`, `lessonWatchThresholdPct` (defaults apply when no row exists) |
 
 A disabled user is locked out immediately: the next API call returns `403 ACCOUNT_DISABLED`,
 and the login screen shows the message without keeping a session.
@@ -129,6 +131,22 @@ and the login screen shows the message without keeping a session.
 - Submitting twice returns the same result and never regrades. Concurrent starts and submits are race-safe.
 - Quizzes (and modules) with attempts are never deleted: archive or unpublish them.
 
+**Final exam rules (Phase 7)**
+
+- The final exam is a `FINAL_EXAM` quiz with no module, one per course, managed with the same question API as module
+  quizzes. The question bank may be larger than one attempt (e.g. 70 questions, 65 drawn at random per attempt). New exam
+  questions default to multiple select in the admin UI; every question type is still allowed.
+- **Locked until the unlock rules are met.** `exam_policies` per course: every published lesson complete (using the
+  course's watch threshold) and every published module quiz passed. Unmet rules come back as a checklist
+  (`403 EXAM_LOCKED` with `details.requirements`; the outline carries the same list). Only currently published content is
+  counted, so unpublishing something never locks a student out. An attempt already in progress can always be resumed.
+- **The answer key is never shown for the exam**, not even after submitting: the review has the student's selections and
+  per-question correct/incorrect only (no options marked correct, no explanations). This protects the question bank.
+- **Passing the exam completes the course**: the enrollment moves from `ACTIVE` to `COMPLETED` in the same step that
+  grades the attempt. Completed students keep access to the course and may use any remaining attempts.
+- Time limit, attempt limit, expiry, snapshotting and locking of used questions work exactly as for module quizzes.
+- There is no certificate yet.
+
 ## Environments
 
 - Local: Docker Compose PostgreSQL (`docker-compose.yml`), `backend/.env`.
@@ -141,8 +159,8 @@ and the login screen shows the message without keeping a session.
 3. Student/admin dashboards — done
 4. Categories, courses, modules, lessons — done
 5. Enrollment, YouTube player, resume-where-you-left-off — done
-6. Module quizzes + question management  ← **this phase** (Excel import/export is Phase 8)
-7. Final exam + locking
+6. Module quizzes + question management — done (Excel import/export is Phase 8)
+7. Final exam + locking  ← **this phase**
 8. Reports and exports
 9. CloudArt Labs
 10. Client service requests
