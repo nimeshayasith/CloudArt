@@ -3,6 +3,7 @@ import { Link, useNavigate, useParams } from 'react-router-dom'
 import { useAuth } from '../auth/AuthContext'
 import { LoadError, Loading, Panel } from '../components/AppShell'
 import PublicShell from '../components/PublicShell'
+import { PremiumBadge } from '../components/UpgradePanel'
 import { api, ApiError, authedApi } from '../lib/api'
 import { formatDuration, plural, pretty } from '../lib/format'
 
@@ -88,7 +89,7 @@ export default function CourseDetail() {
 
   const time = formatDuration(course.totalSeconds)
   return (
-    <PublicShell title={course.title} subtitle={`${course.category} · ${pretty(course.difficulty)}${course.isFree ? ' · Free' : ''}`}>
+    <PublicShell title={course.title} subtitle={`${course.category} · ${pretty(course.difficulty)}${course.isFree ? ' · Free' : ' · Premium'}`}>
       <Link to="/courses" className="text-sm text-ca-muted hover:text-ca-gold">← All courses</Link>
       <div className="mt-4 grid lg:grid-cols-[1fr_18rem] gap-6 items-start">
         <div className="space-y-6">
@@ -111,6 +112,7 @@ export default function CourseDetail() {
                             <span className="text-ca-text/90 min-w-0">{l.title}</span>
                             <span className="shrink-0 flex items-center gap-2 text-xs text-ca-muted">
                               {l.isPreview && <span className="border border-ca-cyan/40 text-ca-cyan rounded-full px-2 py-0.5">Preview</span>}
+                              {l.isPremium && <PremiumBadge />}
                               {formatDuration(l.durationSeconds)}
                             </span>
                           </li>
@@ -125,7 +127,7 @@ export default function CourseDetail() {
         </div>
 
         <aside className="rounded-2xl border border-white/10 bg-ca-bg2/60 p-5 space-y-3">
-          <p className="font-display font-semibold text-ca-text">{course.isFree ? 'Free course' : 'Course'}</p>
+          <p className="font-display font-semibold text-ca-text">{course.isFree ? 'Free course' : 'Premium course'}</p>
           {user ? (
             <EnrollBox slug={course.slug} />
           ) : (

@@ -17,6 +17,7 @@ export default function PublicShell({ title, subtitle, children }) {
           <nav aria-label="Main" className="flex items-center gap-1 flex-1">
             <NavLink to="/courses" className={navClass}>Courses</NavLink>
             <NavLink to="/labs" className={navClass}>Labs</NavLink>
+            <NavLink to="/pricing" className={navClass}>Pricing</NavLink>
           </nav>
           <div className="ml-auto flex items-center gap-2 text-sm">
             {user ? (

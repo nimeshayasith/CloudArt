@@ -2,6 +2,7 @@ import { useEffect, useState } from 'react'
 import { Link, useNavigate, useParams } from 'react-router-dom'
 import AppShell, { LoadError, Loading, Panel } from '../components/AppShell'
 import InstructionText from '../components/InstructionText'
+import UpgradePanel from '../components/UpgradePanel'
 import YouTubePlayer from '../components/YouTubePlayer'
 import { authedApi } from '../lib/api'
 import { plural, pretty } from '../lib/format'
@@ -143,6 +144,9 @@ export default function LabWork() {
         </Panel>
       </AppShell>
     )
+  }
+  if (error?.code === 'PREMIUM_REQUIRED') {
+    return <AppShell title="Premium lab"><UpgradePanel title="This lab is Premium" message="Your subscription isn’t active. Subscribe to keep working on it. Your ticked steps are kept." /></AppShell>
   }
   if (error?.status === 404) return <AppShell title="Lab not found"><p className="text-sm text-ca-muted">This lab isn’t available. <Link to="/labs" className="text-ca-gold underline">Browse all labs</Link></p></AppShell>
   if (error) return <AppShell title="Lab"><LoadError message={error.message} onRetry={() => { setError(null); setReloadKey((k) => k + 1) }} /></AppShell>

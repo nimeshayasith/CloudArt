@@ -97,6 +97,18 @@ enum ProjectStatus {
   CANCELLED
 }
 
+enum SubscriptionStatus {
+  PENDING
+  ACTIVE
+  CANCELLED
+}
+
+enum ProofStatus {
+  PENDING
+  APPROVED
+  REJECTED
+}
+
 enum MilestoneStatus {
   PENDING
   IN_PROGRESS
@@ -136,6 +148,8 @@ model User {
   serviceRequests ServiceRequest[]
   coursesCreated  Course[]
   labsCreated     Lab[]
+  subscriptions   Subscription[]
+  reviewedProofs  PaymentProof[] @relation("ProofReviewer")
 
   @@index([organizationId])
   @@map("users")
@@ -207,6 +221,8 @@ model Lesson {
   durationSeconds Int      @default(0) @map("duration_seconds")
   sortOrder       Int      @default(0) @map("sort_order")
   isPreview       Boolean  @default(false) @map("is_preview")
+  /// Needs an active subscription (unless it is a free preview, or the whole course is premium and this is not a preview).
+  isPremium       Boolean  @default(false) @map("is_premium")
   isPublished     Boolean  @default(false) @map("is_published")
   createdAt       DateTime @default(now()) @map("created_at") @db.Timestamptz(6)
   updatedAt       DateTime @updatedAt @map("updated_at") @db.Timestamptz(6)
@@ -303,6 +319,8 @@ model Quiz {
   passPercentage  Decimal       @default(70) @map("pass_percentage") @db.Decimal(5, 2)
   maxAttempts     Int?          @map("max_attempts")
   shuffleQuestions Boolean      @default(true) @map("shuffle_questions")
+  /// Needs an active subscription. A quiz in a non-free course is always premium.
+  isPremium       Boolean       @default(false) @map("is_premium")
   status          ContentStatus @default(DRAFT)
   createdAt       DateTime      @default(now()) @map("created_at") @db.Timestamptz(6)
   updatedAt       DateTime      @updatedAt @map("updated_at") @db.Timestamptz(6)
@@ -410,6 +428,8 @@ model Lab {
   difficulty       Difficulty    @default(BEGINNER)
   prerequisites    String?
   estimatedMinutes Int?          @map("estimated_minutes")
+  /// Needs an active subscription.
+  isPremium        Boolean       @default(false) @map("is_premium")
   status           ContentStatus @default(DRAFT)
   createdById      String        @map("created_by") @db.Uuid
   createdAt        DateTime      @default(now()) @map("created_at") @db.Timestamptz(6)
@@ -583,4 +603,118 @@ model ProjectMilestone {
 
   @@index([serviceProjectId])
   @@map("project_milestones")
+}
+
+// ───────────────────── 07 · Subscriptions and payments ─────────────────────
+
+model SubscriptionPlan {
+  id           String   @id @default(dbgenerated("gen_random_uuid()")) @db.Uuid
+  name         String   @unique @db.VarChar(100)
+  description  String   @default("")
+  priceAmount  Decimal  @map("price_amount") @db.Decimal(12, 2)
+  /// ISO-style currency code chosen by the admin, e.g. "LKR" or "USD".
+  currency     String   @db.VarChar(3)
+  durationDays Int      @map("duration_days")
+  isActive     Boolean  @default(true) @map("is_active")
+  sortOrder    Int      @default(0) @map("sort_order")
+  createdAt    DateTime @default(now()) @map("created_at") @db.Timestamptz(6)
+  updatedAt    DateTime @updatedAt @map("updated_at") @db.Timestamptz(6)
+
+  subscriptions Subscription[]
+  vouchers      VoucherPlan[]
+
+  @@map("subscription_plans")
+}
+
+/// Percentage vouchers. 100 % is a free voucher. No `voucher_plans` rows means the code works on every plan.
+model Voucher {
+  id              String    @id @default(dbgenerated("gen_random_uuid()")) @db.Uuid
+  code            String    @unique @db.VarChar(32)
+  description     String    @default("")
+  discountPercent Int       @map("discount_percent")
+  validFrom       DateTime? @map("valid_from") @db.Timestamptz(6)
+  validUntil      DateTime? @map("valid_until") @db.Timestamptz(6)
+  maxRedemptions  Int?      @map("max_redemptions")
+  perUserLimit    Int       @default(1) @map("per_user_limit")
+  isActive        Boolean   @default(true) @map("is_active")
+  createdAt       DateTime  @default(now()) @map("created_at") @db.Timestamptz(6)
+
+  plans         VoucherPlan[]
+  subscriptions Subscription[]
+
+  @@map("vouchers")
+}
+
+model VoucherPlan {
+  voucherId String @map("voucher_id") @db.Uuid
+  planId    String @map("plan_id") @db.Uuid
+
+  voucher Voucher          @relation(fields: [voucherId], references: [id], onDelete: Cascade)
+  plan    SubscriptionPlan @relation(fields: [planId], references: [id], onDelete: Cascade)
+
+  @@id([voucherId, planId])
+  @@map("voucher_plans")
+}
+
+/// A purchase of one plan. Prices are snapshotted so later plan or voucher edits never change what a student owes.
+/// "Expired" is derived from ends_at, there is no cron job.
+model Subscription {
+  id              String             @id @default(dbgenerated("gen_random_uuid()")) @db.Uuid
+  userId          String             @map("user_id") @db.Uuid
+  planId          String             @map("plan_id") @db.Uuid
+  voucherId       String?            @map("voucher_id") @db.Uuid
+  status          SubscriptionStatus @default(PENDING)
+  planName        String             @map("plan_name") @db.VarChar(100)
+  durationDays    Int                @map("duration_days")
+  currency        String             @db.VarChar(3)
+  originalAmount  Decimal            @map("original_amount") @db.Decimal(12, 2)
+  discountPercent Int                @default(0) @map("discount_percent")
+  finalAmount     Decimal            @map("final_amount") @db.Decimal(12, 2)
+  startsAt        DateTime?          @map("starts_at") @db.Timestamptz(6)
+  endsAt          DateTime?          @map("ends_at") @db.Timestamptz(6)
+  createdAt       DateTime           @default(now()) @map("created_at") @db.Timestamptz(6)
+  activatedAt     DateTime?          @map("activated_at") @db.Timestamptz(6)
+  cancelledAt     DateTime?          @map("cancelled_at") @db.Timestamptz(6)
+
+  user    User             @relation(fields: [userId], references: [id], onDelete: Restrict)
+  plan    SubscriptionPlan @relation(fields: [planId], references: [id], onDelete: Restrict)
+  voucher Voucher?         @relation(fields: [voucherId], references: [id], onDelete: Restrict)
+  proofs  PaymentProof[]
+
+  @@index([userId, status])
+  @@index([status])
+  @@index([voucherId])
+  @@map("subscriptions")
+}
+
+/// A bank-transfer screenshot submitted by a student and reviewed by the admin.
+model PaymentProof {
+  id              String      @id @default(dbgenerated("gen_random_uuid()")) @db.Uuid
+  subscriptionId  String      @map("subscription_id") @db.Uuid
+  storageKey      String      @map("storage_key")
+  fileName        String      @map("file_name") @db.VarChar(255)
+  contentType     String      @map("content_type") @db.VarChar(100)
+  sizeBytes       Int         @map("size_bytes")
+  reference       String?     @db.VarChar(200)
+  status          ProofStatus @default(PENDING)
+  submittedAt     DateTime    @default(now()) @map("submitted_at") @db.Timestamptz(6)
+  reviewedAt      DateTime?   @map("reviewed_at") @db.Timestamptz(6)
+  reviewedById    String?     @map("reviewed_by") @db.Uuid
+  rejectionReason String?     @map("rejection_reason")
+
+  subscription Subscription @relation(fields: [subscriptionId], references: [id], onDelete: Cascade)
+  reviewedBy   User?        @relation("ProofReviewer", fields: [reviewedById], references: [id], onDelete: SetNull)
+
+  @@index([subscriptionId])
+  @@index([status])
+  @@map("payment_proofs")
+}
+
+/// Small admin-editable settings, e.g. the bank account shown to students ("payment.bank").
+model PlatformSetting {
+  key       String   @id @db.VarChar(100)
+  value     Json
+  updatedAt DateTime @updatedAt @map("updated_at") @db.Timestamptz(6)
+
+  @@map("platform_settings")
 }

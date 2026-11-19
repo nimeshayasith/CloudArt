@@ -1,6 +1,7 @@
 import { prisma } from '../../config/prisma.js'
 import { HttpError } from '../../shared/httpError.js'
 import { drawQuestions, gradeAttempt } from '../quizzes/quiz.rules.js'
+import { hasPremiumAccess, isPremiumQuiz, premiumRequired } from '../subscriptions/access.service.js'
 import { examEligibility } from './exam.service.js'
 import { LEARNABLE, activeEnrollment, notEnrolled } from './learning.service.js'
 
@@ -21,7 +22,7 @@ async function liveQuiz(quizId) {
       course: { status: { in: LEARNABLE } },
       OR: [{ quizType: 'MODULE_QUIZ', module: { isPublished: true } }, { quizType: 'FINAL_EXAM' }],
     },
-    include: { course: { select: { slug: true, title: true } }, module: { select: { title: true } }, _count: { select: { questions: { where: { isActive: true } } } } },
+    include: { course: { select: { slug: true, title: true, isFree: true } }, module: { select: { title: true } }, _count: { select: { questions: { where: { isActive: true } } } } },
   })
   if (!quiz) throw quizNotFound()
   return quiz
@@ -105,7 +106,10 @@ export async function quizSummary(userId, quizId) {
   const finished = attempts.filter((a) => a.status !== 'IN_PROGRESS')
   const open = attempts.find((a) => a.status === 'IN_PROGRESS')
   const isExam = quiz.quizType === 'FINAL_EXAM'
+  const premium = isPremiumQuiz(quiz.course, quiz)
   return {
+    isPremium: premium,
+    premiumLocked: premium && !(await hasPremiumAccess(userId)),
     eligibility: isExam ? await examEligibility(enrollment.id, quiz.courseId) : null,
     quiz: {
       type: quiz.quizType,
@@ -217,6 +221,7 @@ async function loadOwnedAttempt(userId, attemptId) {
 export async function startAttempt(userId, quizId) {
   const quiz = await liveQuiz(quizId)
   const enrollment = await enrolledIn(userId, quiz)
+  if (isPremiumQuiz(quiz.course, quiz) && !(await hasPremiumAccess(userId))) throw premiumRequired()
 
   for (let tries = 0; tries < 3; tries++) {
     const open = await prisma.quizAttempt.findFirst({ where: { quizId, enrollmentId: enrollment.id, status: 'IN_PROGRESS' } })

@@ -3,6 +3,7 @@ import { Link } from 'react-router-dom'
 import { LoadError, Loading } from '../components/AppShell'
 import { inputClass } from '../components/AuthLayout'
 import PublicShell from '../components/PublicShell'
+import { PremiumBadge } from '../components/UpgradePanel'
 import { api } from '../lib/api'
 import { DIFFICULTIES } from '../lib/courseConstants'
 import { formatDuration, plural, pretty } from '../lib/format'
@@ -20,7 +21,7 @@ export function LabCard({ lab }) {
         <p className="text-xs text-ca-cyan">Hands-on lab · {pretty(lab.difficulty)}</p>
         <h3 className="mt-1.5 font-display font-semibold text-lg text-ca-text">{lab.title}</h3>
         {lab.description && <p className="mt-2 text-sm text-ca-muted line-clamp-3">{lab.description}</p>}
-        <p className="mt-4 text-xs text-ca-muted">{plural(lab.stepCount, 'step')}{time ? ` · ${time}` : ''}</p>
+        <p className="mt-4 text-xs text-ca-muted">{plural(lab.stepCount, 'step')}{time ? ` · ${time}` : ''}{lab.isPremium && <PremiumBadge className="ml-2" />}</p>
       </Link>
     </li>
   )

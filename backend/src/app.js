@@ -9,6 +9,7 @@ import { courseRouter } from './modules/courses/course.routes.js'
 import { healthRouter } from './modules/health/health.routes.js'
 import { labRouter } from './modules/labs/lab.routes.js'
 import { learningRouter } from './modules/learning/learning.routes.js'
+import { subscriptionRouter } from './modules/subscriptions/subscription.routes.js'
 import { userRouter } from './modules/users/user.routes.js'
 
 export function createApp() {
@@ -25,6 +26,7 @@ export function createApp() {
   app.use('/api/v1/labs', labRouter)
   app.use('/api/v1/admin', adminRouter)
   app.use('/api/v1', learningRouter)
+  app.use('/api/v1', subscriptionRouter)
 
   app.use(notFound)
   app.use(errorHandler)

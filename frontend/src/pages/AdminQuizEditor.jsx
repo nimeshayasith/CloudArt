@@ -26,6 +26,7 @@ function SettingsForm({ quiz, onSaved }) {
     passPercentage: String(quiz.passPercentage),
     maxAttempts: quiz.maxAttempts === null ? '' : String(quiz.maxAttempts),
     shuffleQuestions: quiz.shuffleQuestions,
+    isPremium: quiz.isPremium,
   })
   const [errors, setErrors] = useState({})
   const [formError, setFormError] = useState('')
@@ -64,6 +65,7 @@ function SettingsForm({ quiz, onSaved }) {
           passPercentage: pass,
           maxAttempts: form.maxAttempts.trim() === '' ? null : Number(form.maxAttempts),
           shuffleQuestions: form.shuffleQuestions,
+          isPremium: form.isPremium,
         },
       })
       onSaved(d.quiz)
@@ -103,6 +105,10 @@ function SettingsForm({ quiz, onSaved }) {
       <label className="flex items-center gap-2 text-sm text-ca-text">
         <input type="checkbox" checked={form.shuffleQuestions} onChange={(e) => { setSaved(false); setForm((f) => ({ ...f, shuffleQuestions: e.target.checked })) }} />
         Draw questions in random order (otherwise the first ones in the list are used)
+      </label>
+      <label className="flex items-center gap-2 text-sm text-ca-text">
+        <input type="checkbox" checked={form.isPremium} onChange={(e) => { setSaved(false); setForm((f) => ({ ...f, isPremium: e.target.checked })) }} />
+        Premium (needs a subscription to take)
       </label>
       <button type="submit" disabled={busy} className={goldBtn}>{busy ? 'Saving…' : 'Save settings'}</button>
     </form>

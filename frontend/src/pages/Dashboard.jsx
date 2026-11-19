@@ -13,6 +13,28 @@ function CourseMeta({ course }) {
   )
 }
 
+function SubscriptionCard() {
+  const [me, setMe] = useState(null)
+  useEffect(() => {
+    let stale = false
+    authedApi('/subscriptions/me').then((d) => !stale && setMe(d)).catch(() => {})
+    return () => { stale = true }
+  }, [])
+  if (!me) return null
+  return (
+    <div className="mb-6 rounded-2xl border border-white/10 bg-ca-bg2/60 p-4 flex flex-wrap items-center justify-between gap-3" data-testid="subscription-card">
+      {me.access.active ? (
+        <p className="text-sm text-emerald-300">★ Premium active ({me.access.planName}) until {new Date(me.access.endsAt).toLocaleDateString()}</p>
+      ) : me.pending ? (
+        <p className="text-sm text-amber-200">You have a plan request waiting for payment.</p>
+      ) : (
+        <p className="text-sm text-ca-muted">You’re on the free plan. Premium content is locked.</p>
+      )}
+      <Link to={me.pending ? '/subscription' : me.access.active ? '/subscription' : '/pricing'} className="text-sm text-ca-gold hover:underline">{me.pending ? 'Continue' : me.access.active ? 'My subscription' : 'See plans'}</Link>
+    </div>
+  )
+}
+
 export default function Dashboard() {
   const { user } = useAuth()
   const [data, setData] = useState(null)
@@ -35,6 +57,7 @@ export default function Dashboard() {
       {user.role === 'ADMIN' && (
         <Link to="/admin" className="mb-6 inline-block text-sm text-ca-gold hover:underline">Go to the admin dashboard →</Link>
       )}
+      <SubscriptionCard />
       {error && <LoadError message={error} onRetry={load} />}
       {!error && !data && <Loading label="Loading your dashboard…" />}
       {data && (

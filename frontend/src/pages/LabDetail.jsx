@@ -3,6 +3,7 @@ import { Link, useNavigate, useParams } from 'react-router-dom'
 import { useAuth } from '../auth/AuthContext'
 import { LoadError, Loading, Panel } from '../components/AppShell'
 import PublicShell from '../components/PublicShell'
+import UpgradePanel from '../components/UpgradePanel'
 import { api, ApiError, authedApi } from '../lib/api'
 import { formatDuration, plural, pretty } from '../lib/format'
 
@@ -12,6 +13,7 @@ function JoinBox({ slug }) {
   const [state, setState] = useState(null)
   const [busy, setBusy] = useState(false)
   const [error, setError] = useState('')
+  const [premium, setPremium] = useState(false)
 
   useEffect(() => {
     let stale = false
@@ -28,13 +30,15 @@ function JoinBox({ slug }) {
       await authedApi(`/labs/${encodeURIComponent(slug)}/enroll`, { method: 'POST' })
       navigate(`/labs/${slug}/work`)
     } catch (e) {
-      setError(e.message)
+      if (e.code === 'PREMIUM_REQUIRED') setPremium(true)
+      else setError(e.message)
       setBusy(false)
     }
   }
 
   return (
     <div className="space-y-3">
+      {premium && <UpgradePanel title="This lab is Premium" message="Subscribe to a plan to start it." />}
       <p role="alert" className="text-sm text-red-300">{error}</p>
       {!state && !error && <p role="status" className="text-sm text-ca-muted font-mono">Checking…</p>}
       {state?.enrolled && (
@@ -101,7 +105,7 @@ export default function LabDetail() {
         </div>
 
         <aside className="rounded-2xl border border-white/10 bg-ca-bg2/60 p-5 space-y-3">
-          <p className="font-display font-semibold text-ca-text">Free lab</p>
+          <p className="font-display font-semibold text-ca-text">{lab.isPremium ? 'Premium lab' : 'Free lab'}</p>
           {user ? (
             <JoinBox slug={lab.slug} />
           ) : (

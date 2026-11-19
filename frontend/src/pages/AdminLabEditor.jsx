@@ -23,6 +23,7 @@ function DetailsForm({ lab, onSaved }) {
     difficulty: lab.difficulty,
     prerequisites: lab.prerequisites,
     estimatedMinutes: lab.estimatedMinutes === null ? '' : String(lab.estimatedMinutes),
+    isPremium: lab.isPremium,
   })
   const [errors, setErrors] = useState({})
   const [formError, setFormError] = useState('')
@@ -44,7 +45,7 @@ function DetailsForm({ lab, onSaved }) {
     try {
       const d = await authedApi(`/admin/labs/${lab.id}`, {
         method: 'PATCH',
-        body: { title: form.title.trim(), description: form.description.trim(), difficulty: form.difficulty, prerequisites: form.prerequisites.trim(), estimatedMinutes: minutes },
+        body: { title: form.title.trim(), description: form.description.trim(), difficulty: form.difficulty, prerequisites: form.prerequisites.trim(), estimatedMinutes: minutes, isPremium: form.isPremium },
       })
       onSaved(d.lab)
       setSaved(true)
@@ -79,6 +80,10 @@ function DetailsForm({ lab, onSaved }) {
       <Field label="Prerequisites (optional)" id="lab-prereq" error={errors.prerequisites} hint="Shown before the steps, e.g. an AWS account or earlier courses.">
         <textarea id="lab-prereq" rows={2} className={inputClass} value={form.prerequisites} onChange={set('prerequisites')} maxLength={2000} />
       </Field>
+      <label className="flex items-center gap-2 text-sm text-ca-text">
+        <input type="checkbox" checked={form.isPremium} onChange={(e) => { setSaved(false); setForm((f) => ({ ...f, isPremium: e.target.checked })) }} />
+        Premium lab (needs a subscription)
+      </label>
       <button type="submit" disabled={busy} className={goldBtn}>{busy ? 'Saving…' : 'Save details'}</button>
     </form>
   )

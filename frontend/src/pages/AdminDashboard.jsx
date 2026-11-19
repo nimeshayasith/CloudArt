@@ -33,6 +33,9 @@ function Stats() {
           <StatCard label="Courses" value={s.courses.published} hint={`${s.courses.draft} draft · manage →`} />
         </Link>
         <StatCard label="Enrollments" value={s.enrollments.active + s.enrollments.completed} hint={`${s.enrollments.completed} completed`} />
+        <Link to="/admin/payments" aria-label="Payments — review payments" className="block rounded-2xl focus:outline-none focus-visible:ring-2 focus-visible:ring-ca-gold">
+          <StatCard label="Payments to review" value={s.payments.awaitingReview} hint={`${s.payments.activeSubscribers} subscribers · manage →`} />
+        </Link>
       </div>
       <Panel title="Recent sign-ups">
         {s.recentSignups.length === 0 ? (

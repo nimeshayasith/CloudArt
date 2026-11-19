@@ -56,6 +56,10 @@ function NewCourse({ categories }) {
           </select>
         </Field>
       </div>
+      <label className="flex items-center gap-2 text-sm text-ca-text">
+        <input type="checkbox" checked={!form.isFree} onChange={(e) => setForm((f) => ({ ...f, isFree: !e.target.checked }))} />
+        Premium course (every lesson and quiz needs a subscription, except free previews)
+      </label>
       <Field label="Description" id="new-description" error={errors.description}>
         <textarea id="new-description" rows={3} className={inputClass} value={form.description} onChange={set('description')} maxLength={5000} />
       </Field>
@@ -132,7 +136,7 @@ export default function AdminCourses() {
                   <li key={c.id} className="py-3 flex flex-wrap items-center gap-x-4 gap-y-2" data-testid="course-row">
                     <div className="min-w-0 flex-1 basis-56">
                       <Link to={`/admin/courses/${c.id}`} className="text-ca-text font-medium hover:text-ca-gold break-words">{c.title}</Link>
-                      <p className="text-xs text-ca-muted">{c.category.name} · {pretty(c.difficulty)} · {plural(c.moduleCount, 'module')} · {plural(c.enrollmentCount, 'enrollment')}</p>
+                      <p className="text-xs text-ca-muted">{c.category.name} · {pretty(c.difficulty)} · {plural(c.moduleCount, 'module')} · {plural(c.enrollmentCount, 'enrollment')}{c.isFree ? '' : ' · Premium'}</p>
                     </div>
                     <StatusBadge status={c.status} />
                   </li>

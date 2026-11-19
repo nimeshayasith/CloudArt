@@ -1,7 +1,8 @@
 import { prisma } from '../../config/prisma.js'
 import { HttpError } from '../../shared/httpError.js'
+import { isPremiumLesson } from '../subscriptions/access.service.js'
 
-const LESSON_PUBLIC = { id: true, title: true, description: true, durationSeconds: true, isPreview: true, sortOrder: true }
+const LESSON_PUBLIC = { id: true, title: true, description: true, durationSeconds: true, isPreview: true, isPremium: true, sortOrder: true }
 
 /** Published categories that actually contain a published course (for catalog filters). */
 export async function listCategories() {
@@ -72,7 +73,7 @@ export async function getPublishedBySlug(slug) {
       id: m.id,
       title: m.title,
       description: m.description,
-      lessons: m.lessons.map((l) => ({ id: l.id, title: l.title, description: l.description, durationSeconds: l.durationSeconds, isPreview: l.isPreview })),
+      lessons: m.lessons.map((l) => ({ id: l.id, title: l.title, description: l.description, durationSeconds: l.durationSeconds, isPreview: l.isPreview, isPremium: isPremiumLesson(course, l) })),
     })),
   }
 }

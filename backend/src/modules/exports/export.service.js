@@ -129,6 +129,51 @@ export async function courseProgressWorkbook(courseId) {
   return { wb, filename: `cloudart-progress-${fileSlug(course.slug, 'course')}-${today()}.xlsx` }
 }
 
+// ───────────────────────────── subscriptions ─────────────────────────────
+
+export async function subscriptionsWorkbook() {
+  const now = new Date()
+  const rows = await prisma.subscription.findMany({
+    orderBy: { createdAt: 'desc' },
+    include: { voucher: { select: { code: true } }, user: { select: { fullName: true, username: true, email: true } } },
+  })
+  const statusOf = (s) => (s.status !== 'ACTIVE' ? s.status : s.endsAt <= now ? 'EXPIRED' : s.startsAt > now ? 'UPCOMING' : 'ACTIVE')
+  const { wb } = buildSheet({
+    sheetName: 'Subscriptions',
+    columns: [
+      { header: 'Full name', key: 'fullName', width: 26 },
+      { header: 'Username', key: 'username', width: 18 },
+      { header: 'Email', key: 'email', width: 32 },
+      { header: 'Plan', key: 'plan', width: 22 },
+      { header: 'Status', key: 'status', width: 12 },
+      { header: 'Currency', key: 'currency', width: 10 },
+      { header: 'List price', key: 'original', width: 12 },
+      { header: 'Discount %', key: 'discount', width: 12 },
+      { header: 'Amount paid', key: 'final', width: 14 },
+      { header: 'Voucher', key: 'voucher', width: 16 },
+      { header: 'Requested', key: 'requested', width: 14 },
+      { header: 'Starts', key: 'starts', width: 14 },
+      { header: 'Ends', key: 'ends', width: 14 },
+    ],
+    rows: rows.map((s) => ({
+      fullName: safeText(s.user.fullName),
+      username: safeText(s.user.username),
+      email: safeText(s.user.email),
+      plan: safeText(s.planName),
+      status: statusOf(s),
+      currency: s.currency,
+      original: num(s.originalAmount),
+      discount: s.discountPercent,
+      final: num(s.finalAmount),
+      voucher: safeText(s.voucher?.code),
+      requested: date(s.createdAt),
+      starts: date(s.startsAt),
+      ends: date(s.endsAt),
+    })),
+  })
+  return { wb, filename: `cloudart-subscriptions-${today()}.xlsx` }
+}
+
 // ───────────────────────────── lab progress ─────────────────────────────
 
 export async function labProgressWorkbook(labId) {

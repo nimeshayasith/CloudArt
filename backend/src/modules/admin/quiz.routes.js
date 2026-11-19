@@ -19,6 +19,7 @@ const settings = {
   passPercentage: z.number({ message: 'Enter a percentage' }).min(1, 'Between 1 and 100').max(100, 'Between 1 and 100'),
   maxAttempts: z.number({ message: 'Enter a whole number' }).int().min(1, 'At least 1 attempt').max(50, 'At most 50 attempts').nullable(),
   shuffleQuestions: z.boolean(),
+  isPremium: z.boolean(),
 }
 
 const quizCreate = z.object({ title: title.optional(), description: description.optional(), ...Object.fromEntries(Object.entries(settings).map(([k, v]) => [k, v.optional()])) }).strict()

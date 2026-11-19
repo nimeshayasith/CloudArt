@@ -5,6 +5,7 @@ import AdminCourses from './pages/AdminCourses'
 import AdminDashboard from './pages/AdminDashboard'
 import AdminLabEditor from './pages/AdminLabEditor'
 import AdminLabs from './pages/AdminLabs'
+import AdminPayments from './pages/AdminPayments'
 import AdminQuizEditor from './pages/AdminQuizEditor'
 import Attempt from './pages/Attempt'
 import CourseDetail from './pages/CourseDetail'
@@ -16,9 +17,11 @@ import LabWork from './pages/LabWork'
 import Labs from './pages/Labs'
 import Learn from './pages/Learn'
 import Login from './pages/Login'
+import Pricing from './pages/Pricing'
 import Profile from './pages/Profile'
 import Quiz from './pages/Quiz'
 import Register from './pages/Register'
+import Subscription from './pages/Subscription'
 import VerifyEmail from './pages/VerifyEmail'
 
 export default function App() {
@@ -30,6 +33,8 @@ export default function App() {
       <Route path="/login" element={<Login />} />
       <Route path="/courses" element={<Courses />} />
       <Route path="/courses/:slug" element={<CourseDetail />} />
+      <Route path="/pricing" element={<Pricing />} />
+      <Route path="/subscription" element={<ProtectedRoute><Subscription /></ProtectedRoute>} />
       <Route path="/labs" element={<Labs />} />
       <Route path="/labs/:slug" element={<LabDetail />} />
       <Route path="/labs/:slug/work" element={<ProtectedRoute><LabWork /></ProtectedRoute>} />
@@ -42,6 +47,7 @@ export default function App() {
       <Route path="/admin/courses" element={<ProtectedRoute admin><AdminCourses /></ProtectedRoute>} />
       <Route path="/admin/courses/:id" element={<ProtectedRoute admin><AdminCourseEditor /></ProtectedRoute>} />
       <Route path="/admin/quizzes/:id" element={<ProtectedRoute admin><AdminQuizEditor /></ProtectedRoute>} />
+      <Route path="/admin/payments" element={<ProtectedRoute admin><AdminPayments /></ProtectedRoute>} />
       <Route path="/admin/labs" element={<ProtectedRoute admin><AdminLabs /></ProtectedRoute>} />
       <Route path="/admin/labs/:id" element={<ProtectedRoute admin><AdminLabEditor /></ProtectedRoute>} />
       <Route path="*" element={<Navigate to="/" replace />} />

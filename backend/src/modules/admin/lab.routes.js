@@ -21,6 +21,7 @@ const labFields = {
   difficulty: z.enum(DIFFICULTIES).optional(),
   prerequisites: z.string().trim().max(2000, 'Prerequisites must be at most 2000 characters').optional(),
   estimatedMinutes: minutes.nullable().optional(),
+  isPremium: z.boolean().optional(),
 }
 const labCreate = z.object({ title, ...labFields }).strict()
 const labUpdate = atLeastOne(z.object({ title: title.optional(), status: z.enum(STATUSES).optional(), ...labFields }).strict())

@@ -3,6 +3,7 @@ import { Link } from 'react-router-dom'
 import { LoadError, Loading } from '../components/AppShell'
 import { inputClass } from '../components/AuthLayout'
 import PublicShell from '../components/PublicShell'
+import { PremiumBadge } from '../components/UpgradePanel'
 import { api } from '../lib/api'
 import { formatDuration, plural, pretty } from '../lib/format'
 
@@ -21,7 +22,7 @@ export function CourseCard({ course }) {
         {course.description && <p className="mt-2 text-sm text-ca-muted line-clamp-3">{course.description}</p>}
         <p className="mt-4 text-xs text-ca-muted">
           {plural(course.moduleCount, 'module')} · {plural(course.lessonCount, 'lesson')}{time ? ` · ${time}` : ''}
-          {course.isFree && <span className="ml-2 border border-emerald-400/40 text-emerald-300 rounded-full px-2 py-0.5">Free</span>}
+          {course.isFree ? <span className="ml-2 border border-emerald-400/40 text-emerald-300 rounded-full px-2 py-0.5">Free</span> : <PremiumBadge className="ml-2" />}
         </p>
       </Link>
     </li>

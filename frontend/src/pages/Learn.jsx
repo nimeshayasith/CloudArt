@@ -1,6 +1,7 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react'
 import { Link, useNavigate, useParams, useSearchParams } from 'react-router-dom'
 import AppShell, { LoadError, Loading, Panel } from '../components/AppShell'
+import UpgradePanel from '../components/UpgradePanel'
 import YouTubePlayer from '../components/YouTubePlayer'
 import { authedApi } from '../lib/api'
 import { formatDuration, plural } from '../lib/format'
@@ -68,6 +69,7 @@ function ExamCard({ exam }) {
         <p className="mt-0.5 text-xs text-ca-muted">
           {plural(exam.questionCount, 'question')} · pass mark {exam.passPercentage}%{exam.durationMinutes ? ` · ${exam.durationMinutes} min` : ''}
         </p>
+        {exam.premiumLocked && <p className="mt-2 text-sm text-ca-gold" data-testid="exam-premium">★ Premium: a subscription is needed. <Link to="/pricing" className="underline">See plans</Link></p>}
         {exam.locked ? (
           <div className="mt-3 space-y-3">
             <p className="text-sm text-ca-muted"><span aria-hidden="true">🔒</span> Locked. Finish these to unlock it:</p>
@@ -94,7 +96,7 @@ export default function Learn() {
   const [outline, setOutline] = useState(null)
   const [outlineError, setOutlineError] = useState(null)
   const [lesson, setLesson] = useState(null)
-  const [lessonError, setLessonError] = useState('')
+  const [lessonError, setLessonError] = useState(null)
   const [saveNote, setSaveNote] = useState('')
   const [finishedId, setFinishedId] = useState(null)
   const [reloadKey, setReloadKey] = useState(0)
@@ -118,9 +120,9 @@ export default function Learn() {
     if (!selectedId) return undefined
     let stale = false
     authedApi(`/learn/lessons/${selectedId}`)
-      .then((d) => { if (!stale) { setLesson(d.lesson); setLessonError('') } })
-      .catch((e) => !stale && setLessonError(e.message))
-    return () => { stale = true; setLesson(null); setLessonError(''); setFinishedId(null) }
+      .then((d) => { if (!stale) { setLesson(d.lesson); setLessonError(null) } })
+      .catch((e) => !stale && setLessonError({ message: e.message, code: e.code }))
+    return () => { stale = true; setLesson(null); setLessonError(null); setFinishedId(null) }
   }, [selectedId, lessonAttempt])
 
   const saveProgress = useCallback(async (lessonId, { position, duration }) => {
@@ -198,7 +200,8 @@ export default function Learn() {
       <div className="grid lg:grid-cols-[1fr_20rem] gap-6 items-start">
         <div className="space-y-4 min-w-0">
           {flat.length === 0 && <Panel title="No lessons yet"><p className="text-sm text-ca-muted">This course doesn’t have published lessons yet. Check back soon.</p></Panel>}
-          {lessonError && <LoadError message={lessonError} onRetry={() => setLessonAttempt((a) => a + 1)} />}
+          {lessonError?.code === 'PREMIUM_REQUIRED' && <UpgradePanel title="This lesson is Premium" message="Subscribe to a plan to watch it. Free lessons stay open to you." />}
+          {lessonError && lessonError.code !== 'PREMIUM_REQUIRED' && <LoadError message={lessonError.message} onRetry={() => setLessonAttempt((a) => a + 1)} />}
           {selectedId && !lesson && !lessonError && <Loading label="Loading lesson…" />}
           {lesson && (
             <>
@@ -245,10 +248,11 @@ export default function Learn() {
                             aria-current={active ? 'true' : undefined}
                             className={`flex items-start gap-2 rounded-lg px-2 py-1.5 text-sm ${active ? 'bg-ca-gold/15 text-ca-gold' : 'text-ca-muted hover:text-ca-text'}`}
                           >
-                            <span aria-hidden="true" className={`mt-0.5 ${l.completed ? 'text-emerald-300' : ''}`}>{l.completed ? '✓' : '○'}</span>
+                            <span aria-hidden="true" className={`mt-0.5 ${l.completed ? 'text-emerald-300' : ''}`}>{l.locked ? '🔒' : l.completed ? '✓' : '○'}</span>
                             <span className="min-w-0 flex-1 break-words">
                               {l.title}
                               {l.completed && <span className="sr-only"> (completed)</span>}
+                              {l.locked && <span className="sr-only"> (Premium, locked)</span>}
                             </span>
                             <span className="shrink-0 text-xs">{formatDuration(l.durationSeconds)}</span>
                           </Link>
@@ -263,10 +267,10 @@ export default function Learn() {
                       data-testid="module-quiz-link"
                       className="mt-1.5 flex items-start gap-2 rounded-lg border border-white/10 px-2 py-1.5 text-sm text-ca-muted hover:text-ca-text hover:border-ca-gold/50"
                     >
-                      <span aria-hidden="true" className={m.quiz.passed ? 'text-emerald-300' : 'text-ca-gold'}>{m.quiz.passed ? '✓' : '❖'}</span>
+                      <span aria-hidden="true" className={m.quiz.passed ? 'text-emerald-300' : 'text-ca-gold'}>{m.quiz.premiumLocked ? '🔒' : m.quiz.passed ? '✓' : '❖'}</span>
                       <span className="min-w-0 flex-1 break-words">{m.quiz.title}</span>
                       <span className="shrink-0 text-xs">
-                        {m.quiz.passed ? `Passed ${m.quiz.bestPercentage}%` : m.quiz.inProgress ? 'In progress' : m.quiz.bestPercentage !== null ? `Best ${m.quiz.bestPercentage}%` : plural(m.quiz.questionCount, 'question')}
+                        {m.quiz.premiumLocked ? 'Premium' : m.quiz.passed ? `Passed ${m.quiz.bestPercentage}%` : m.quiz.inProgress ? 'In progress' : m.quiz.bestPercentage !== null ? `Best ${m.quiz.bestPercentage}%` : plural(m.quiz.questionCount, 'question')}
                       </span>
                     </Link>
                   )}

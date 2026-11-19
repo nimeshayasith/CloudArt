@@ -55,7 +55,7 @@ const seconds = z.number({ message: 'Duration must be a number of seconds' }).in
 const video = z.string().trim().min(11, 'Enter a YouTube link or video id').max(300)
 
 const lessonCreate = z
-  .object({ title, description: description.optional(), video, durationSeconds: seconds.optional(), isPreview: z.boolean().optional() })
+  .object({ title, description: description.optional(), video, durationSeconds: seconds.optional(), isPreview: z.boolean().optional(), isPremium: z.boolean().optional() })
   .strict()
 const lessonUpdate = atLeastOne(
   z
@@ -65,6 +65,7 @@ const lessonUpdate = atLeastOne(
       video: video.optional(),
       durationSeconds: seconds.optional(),
       isPreview: z.boolean().optional(),
+      isPremium: z.boolean().optional(),
       isPublished: z.boolean().optional(),
     })
     .strict(),

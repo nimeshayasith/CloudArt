@@ -62,6 +62,10 @@ function DetailsForm({ course, categories, onSaved }) {
       <Field label="Description" id="course-description" error={errors.description}>
         <textarea id="course-description" rows={4} className={inputClass} value={form.description} onChange={set('description')} maxLength={5000} />
       </Field>
+      <label className="flex items-center gap-2 text-sm text-ca-text">
+        <input type="checkbox" checked={!form.isFree} onChange={(e) => { setSaved(false); setForm((f) => ({ ...f, isFree: !e.target.checked })) }} />
+        Premium course (every lesson and quiz needs a subscription, except free previews)
+      </label>
       <button type="submit" disabled={busy} className={goldBtn}>{busy ? 'Saving…' : 'Save details'}</button>
     </form>
   )
@@ -78,6 +82,7 @@ function LessonForm({ idPrefix, initial, submitLabel, onSubmit, onCancel }) {
     minutes: String(startMinutes),
     description: initial?.description ?? '',
     isPreview: initial?.isPreview ?? false,
+    isPremium: initial?.isPremium ?? false,
   })
   const [errors, setErrors] = useState({})
   const [formError, setFormError] = useState('')
@@ -95,7 +100,7 @@ function LessonForm({ idPrefix, initial, submitLabel, onSubmit, onCancel }) {
     if (!Number.isFinite(minutes) || minutes < 0 || minutes > 720) v.durationSeconds = 'Duration must be between 0 and 720 minutes'
     setErrors(v)
     if (Object.keys(v).length) return
-    const body = { title: form.title.trim(), video: form.video.trim(), description: form.description.trim(), isPreview: form.isPreview }
+    const body = { title: form.title.trim(), video: form.video.trim(), description: form.description.trim(), isPreview: form.isPreview, isPremium: form.isPremium }
     // Keep the exact stored seconds unless the admin actually changed the minutes.
     if (!initial || String(startMinutes) !== form.minutes) body.durationSeconds = Math.round(minutes * 60)
     setBusy(true)
@@ -129,6 +134,10 @@ function LessonForm({ idPrefix, initial, submitLabel, onSubmit, onCancel }) {
         <input type="checkbox" checked={form.isPreview} onChange={(e) => setForm((f) => ({ ...f, isPreview: e.target.checked }))} />
         Free preview lesson
       </label>
+      <label className="flex items-center gap-2 text-sm text-ca-text">
+        <input type="checkbox" checked={form.isPremium} onChange={(e) => setForm((f) => ({ ...f, isPremium: e.target.checked }))} />
+        Premium lesson (needs a subscription)
+      </label>
       <div className="flex items-center gap-3">
         <button type="submit" disabled={busy} className={goldBtn}>{busy ? 'Saving…' : submitLabel}</button>
         <button type="button" onClick={onCancel} className="text-sm text-ca-muted hover:text-ca-text">Cancel</button>
@@ -157,7 +166,7 @@ function LessonRow({ lesson, index, count, busy, act, move }) {
       <div className="min-w-0 flex-1 basis-48">
         <p className="text-sm text-ca-text break-words">{lesson.title}</p>
         <p className="text-xs text-ca-muted">
-          {formatDuration(lesson.durationSeconds) || 'No length set'}{lesson.isPreview ? ' · Preview' : ''} · <span className={lesson.isPublished ? 'text-emerald-300' : ''}>{lesson.isPublished ? 'Published' : 'Draft'}</span>
+          {formatDuration(lesson.durationSeconds) || 'No length set'}{lesson.isPreview ? ' · Preview' : ''}{lesson.isPremium ? ' · Premium' : ''} · <span className={lesson.isPublished ? 'text-emerald-300' : ''}>{lesson.isPublished ? 'Published' : 'Draft'}</span>
         </p>
       </div>
       <div className="flex flex-wrap items-center gap-1.5">

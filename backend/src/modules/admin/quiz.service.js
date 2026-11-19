@@ -35,6 +35,7 @@ const quizShape = (qz, extra = {}) => ({
   passPercentage: Number(qz.passPercentage),
   maxAttempts: qz.maxAttempts,
   shuffleQuestions: qz.shuffleQuestions,
+  isPremium: qz.isPremium,
   status: qz.status,
   createdAt: qz.createdAt,
   updatedAt: qz.updatedAt,
@@ -89,6 +90,7 @@ export async function createModuleQuiz(moduleId, input) {
       passPercentage: input.passPercentage ?? 70,
       maxAttempts: input.maxAttempts ?? null,
       shuffleQuestions: input.shuffleQuestions ?? true,
+      isPremium: input.isPremium ?? false,
     },
   })
   return quizShape(quiz, { questions: [], activeQuestions: 0, attemptCount: 0 })
@@ -113,6 +115,7 @@ export async function createFinalExam(courseId, input) {
       passPercentage: input.passPercentage ?? 70,
       maxAttempts: input.maxAttempts === undefined ? 3 : input.maxAttempts,
       shuffleQuestions: input.shuffleQuestions ?? true,
+      isPremium: input.isPremium ?? false,
     },
   })
   return quizShape(quiz, { questions: [], activeQuestions: 0, attemptCount: 0 })

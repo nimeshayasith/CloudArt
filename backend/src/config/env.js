@@ -9,6 +9,8 @@ const schema = z.object({
   COGNITO_USER_POOL_ID: z.string().min(1),
   COGNITO_APP_CLIENT_ID: z.string().min(1),
   WHATSAPP_COMMUNITY_URL: z.string().default(''),
+  /** Private folder for uploaded payment screenshots (local development). Swapped for S3 at deploy time. */
+  UPLOAD_DIR: z.string().default('uploads'),
 })
 
 const parsed = schema.safeParse(process.env)

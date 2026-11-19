@@ -1,6 +1,7 @@
 import { useEffect, useState } from 'react'
 import { Link, useNavigate, useParams } from 'react-router-dom'
 import AppShell, { LoadError, Loading, Panel } from '../components/AppShell'
+import UpgradePanel from '../components/UpgradePanel'
 import { authedApi } from '../lib/api'
 import { plural } from '../lib/format'
 
@@ -79,15 +80,16 @@ export default function Quiz() {
                 <Link to={`/learn/${quiz.courseSlug}`} className="mt-3 inline-block text-sm text-ca-gold hover:underline">Back to the course</Link>
               </div>
             )}
+            {data.premiumLocked && <div className="mt-4"><UpgradePanel title="This quiz is Premium" message="Subscribe to a plan to take it." /></div>}
             <p role="alert" className="mt-3 text-sm text-red-300">{startError}</p>
             <div className="mt-4">
               <button
                 type="button"
-                disabled={starting || locked || (noneLeft && !data.inProgressAttemptId)}
+                disabled={starting || locked || data.premiumLocked || (noneLeft && !data.inProgressAttemptId)}
                 onClick={data.inProgressAttemptId ? () => navigate(`/attempt/${data.inProgressAttemptId}`) : start}
                 className="rounded-full bg-ca-gold text-ca-bg px-6 py-2.5 text-sm font-semibold hover:bg-[#ffd47a] disabled:opacity-60"
               >
-                {starting ? 'Starting…' : locked ? 'Locked' : noneLeft && !data.inProgressAttemptId ? 'No attempts left' : label}
+                {starting ? 'Starting…' : data.premiumLocked ? 'Premium' : locked ? 'Locked' : noneLeft && !data.inProgressAttemptId ? 'No attempts left' : label}
               </button>
             </div>
           </Panel>

@@ -11,7 +11,7 @@ const PAGE_SIZE = 10
 
 function NewLab() {
   const navigate = useNavigate()
-  const [form, setForm] = useState({ title: '', difficulty: 'BEGINNER', estimatedMinutes: '', description: '' })
+  const [form, setForm] = useState({ title: '', difficulty: 'BEGINNER', estimatedMinutes: '', description: '', isPremium: false })
   const [errors, setErrors] = useState({})
   const [formError, setFormError] = useState('')
   const [busy, setBusy] = useState(false)
@@ -30,7 +30,7 @@ function NewLab() {
     try {
       const d = await authedApi('/admin/labs', {
         method: 'POST',
-        body: { title: form.title.trim(), difficulty: form.difficulty, description: form.description.trim(), ...(minutes === null ? {} : { estimatedMinutes: minutes }) },
+        body: { title: form.title.trim(), difficulty: form.difficulty, description: form.description.trim(), isPremium: form.isPremium, ...(minutes === null ? {} : { estimatedMinutes: minutes }) },
       })
       navigate(`/admin/labs/${d.lab.id}`)
     } catch (ex) {
@@ -59,6 +59,10 @@ function NewLab() {
       <Field label="Description" id="new-lab-description" error={errors.description}>
         <textarea id="new-lab-description" rows={3} className={inputClass} value={form.description} onChange={set('description')} maxLength={5000} />
       </Field>
+      <label className="flex items-center gap-2 text-sm text-ca-text">
+        <input type="checkbox" checked={form.isPremium} onChange={(e) => setForm((f) => ({ ...f, isPremium: e.target.checked }))} />
+        Premium lab (needs a subscription)
+      </label>
       <button type="submit" disabled={busy} className={`${primaryBtn} sm:w-auto sm:px-8`}>{busy ? 'Creating…' : 'Create draft lab'}</button>
     </form>
   )
@@ -127,7 +131,7 @@ export default function AdminLabs() {
                   <li key={l.id} className="py-3 flex flex-wrap items-center gap-x-4 gap-y-2" data-testid="lab-row">
                     <div className="min-w-0 flex-1 basis-56">
                       <Link to={`/admin/labs/${l.id}`} className="text-ca-text font-medium hover:text-ca-gold break-words">{l.title}</Link>
-                      <p className="text-xs text-ca-muted">{pretty(l.difficulty)} · {plural(l.stepCount, 'step')} · {plural(l.enrollmentCount, 'student')}</p>
+                      <p className="text-xs text-ca-muted">{pretty(l.difficulty)} · {plural(l.stepCount, 'step')} · {plural(l.enrollmentCount, 'student')}{l.isPremium ? ' · Premium' : ''}</p>
                     </div>
                     <StatusBadge status={l.status} />
                   </li>

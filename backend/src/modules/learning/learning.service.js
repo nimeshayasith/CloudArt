@@ -1,5 +1,6 @@
 import { prisma } from '../../config/prisma.js'
 import { HttpError } from '../../shared/httpError.js'
+import { hasPremiumAccess, isPremiumLesson, isPremiumQuiz, premiumRequired } from '../subscriptions/access.service.js'
 import { examEligibility } from './exam.service.js'
 
 /** Students may keep learning from a course an admin has since archived; drafts are closed. */
@@ -92,7 +93,7 @@ const playerTree = {
       lessons: {
         where: { isPublished: true },
         orderBy,
-        select: { id: true, title: true, description: true, durationSeconds: true, isPreview: true },
+        select: { id: true, title: true, description: true, durationSeconds: true, isPreview: true, isPremium: true },
       },
       quizzes: {
         where: { status: 'PUBLISHED', quizType: 'MODULE_QUIZ' },
@@ -103,6 +104,7 @@ const playerTree = {
           durationMinutes: true,
           passPercentage: true,
           maxAttempts: true,
+          isPremium: true,
           _count: { select: { questions: { where: { isActive: true } } } },
         },
       },
@@ -137,11 +139,12 @@ async function quizStandings(enrollmentId, modules) {
 export async function courseForLearning(userId, slug) {
   const course = await prisma.course.findFirst({
     where: { slug, status: { in: LEARNABLE } },
-    select: { id: true, title: true, slug: true, description: true, ...playerTree },
+    select: { id: true, title: true, slug: true, description: true, isFree: true, ...playerTree },
   })
   if (!course) throw courseNotFound()
   const enrollment = await activeEnrollment(userId, course.id)
   if (!enrollment) throw notEnrolled()
+  const access = await hasPremiumAccess(userId)
 
   const lessons = lessonOrderIndex(course.modules)
   const rows = await prisma.lessonProgress.findMany({
@@ -155,12 +158,13 @@ export async function courseForLearning(userId, slug) {
     enrollment,
     progress: summarizeProgress(lessons, byLesson),
     resume: pickResume(lessons, byLesson),
-    exam: await examOutline(enrollment.id, course.id),
+    access: { premium: access },
+    exam: await examOutline(enrollment.id, course, access),
     modules: course.modules.map((m) => ({
       id: m.id,
       title: m.title,
       description: m.description,
-      quiz: m.quizzes[0] ? quizOutline(m.quizzes[0], standings.get(m.quizzes[0].id)) : null,
+      quiz: m.quizzes[0] ? quizOutline(m.quizzes[0], standings.get(m.quizzes[0].id), isPremiumQuiz(course, m.quizzes[0]), access) : null,
       lessons: m.lessons.map((l) => {
         const p = byLesson.get(l.id)
         return {
@@ -169,6 +173,8 @@ export async function courseForLearning(userId, slug) {
           description: l.description,
           durationSeconds: l.durationSeconds,
           isPreview: l.isPreview,
+          isPremium: isPremiumLesson(course, l),
+          locked: isPremiumLesson(course, l) && !access,
           completed: p?.completed ?? false,
           lastPositionSeconds: p?.lastPositionSeconds ?? 0,
         }
@@ -178,17 +184,18 @@ export async function courseForLearning(userId, slug) {
 }
 
 /** The course's final exam as this student sees it: standing, and whether it is still locked and why. */
-async function examOutline(enrollmentId, courseId) {
+async function examOutline(enrollmentId, course, access) {
+  const courseId = course.id
   const exam = await prisma.quiz.findFirst({
     where: { courseId, quizType: 'FINAL_EXAM', status: 'PUBLISHED' },
-    select: { id: true, title: true, totalQuestions: true, durationMinutes: true, passPercentage: true, maxAttempts: true, _count: { select: { questions: { where: { isActive: true } } } } },
+    select: { id: true, title: true, totalQuestions: true, durationMinutes: true, passPercentage: true, maxAttempts: true, isPremium: true, _count: { select: { questions: { where: { isActive: true } } } } },
   })
   if (!exam) return null
   const [standings, eligibility] = await Promise.all([quizStandings(enrollmentId, [{ quizzes: [exam] }]), examEligibility(enrollmentId, courseId)])
-  return { ...quizOutline(exam, standings.get(exam.id)), locked: !eligibility.eligible, requirements: eligibility.requirements }
+  return { ...quizOutline(exam, standings.get(exam.id), isPremiumQuiz(course, exam), access), locked: !eligibility.eligible, requirements: eligibility.requirements }
 }
 
-function quizOutline(q, standing) {
+function quizOutline(q, standing, premium = false, access = true) {
   const used = standing?.attemptsUsed ?? 0
   return {
     id: q.id,
@@ -197,6 +204,8 @@ function quizOutline(q, standing) {
     durationMinutes: q.durationMinutes,
     passPercentage: Number(q.passPercentage),
     maxAttempts: q.maxAttempts,
+    isPremium: premium,
+    premiumLocked: premium && !access,
     attemptsUsed: used,
     attemptsLeft: q.maxAttempts === null ? null : Math.max(0, q.maxAttempts - used),
     bestPercentage: standing?.bestPercentage ?? null,
@@ -209,7 +218,7 @@ function quizOutline(q, standing) {
 async function liveLesson(lessonId) {
   const lesson = await prisma.lesson.findFirst({
     where: { id: lessonId, isPublished: true, module: { isPublished: true, course: { status: { in: LEARNABLE } } } },
-    include: { module: { select: { courseId: true } } },
+    include: { module: { select: { courseId: true, course: { select: { isFree: true } } } } },
   })
   if (!lesson) throw lessonNotFound()
   return lesson
@@ -223,6 +232,7 @@ export async function lessonForPlayback(userId, lessonId) {
   const lesson = await liveLesson(lessonId)
   const enrollment = await activeEnrollment(userId, lesson.module.courseId)
   if (!enrollment && !lesson.isPreview) throw notEnrolled()
+  if (isPremiumLesson(lesson.module.course, lesson) && !(await hasPremiumAccess(userId))) throw premiumRequired()
 
   const progress = enrollment
     ? await prisma.lessonProgress.findUnique({ where: { enrollmentId_lessonId: { enrollmentId: enrollment.id, lessonId } } })
@@ -234,6 +244,7 @@ export async function lessonForPlayback(userId, lessonId) {
     youtubeVideoId: lesson.youtubeVideoId,
     durationSeconds: lesson.durationSeconds,
     isPreview: lesson.isPreview,
+    isPremium: isPremiumLesson(lesson.module.course, lesson),
     enrolled: !!enrollment,
     completed: progress?.completed ?? false,
     startSeconds: progress && !progress.completed ? progress.lastPositionSeconds : 0,
@@ -259,6 +270,7 @@ export async function saveProgress(userId, lessonId, { positionSeconds, duration
   const lesson = await liveLesson(lessonId)
   const enrollment = await activeEnrollment(userId, lesson.module.courseId)
   if (!enrollment) throw notEnrolled()
+  if (isPremiumLesson(lesson.module.course, lesson) && !(await hasPremiumAccess(userId))) throw premiumRequired()
 
   const duration = lesson.durationSeconds > 0 ? lesson.durationSeconds : (durationSeconds ?? 0)
   const position = Math.max(0, Math.min(Math.floor(positionSeconds), duration > 0 ? duration : Math.floor(positionSeconds)))

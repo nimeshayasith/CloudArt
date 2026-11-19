@@ -1,5 +1,6 @@
 import { prisma } from '../../config/prisma.js'
 import { HttpError } from '../../shared/httpError.js'
+import { hasPremiumAccess, premiumRequired } from '../subscriptions/access.service.js'
 
 /** Students keep working in a lab an admin has since archived; drafts are closed. */
 const LEARNABLE = ['PUBLISHED', 'ARCHIVED']
@@ -17,6 +18,7 @@ const summarize = (lab) => ({
   description: lab.description,
   difficulty: lab.difficulty,
   estimatedMinutes: lab.estimatedMinutes,
+  isPremium: lab.isPremium,
   stepCount: lab._count.steps,
 })
 
@@ -59,8 +61,9 @@ async function enrollmentOf(userId, labId) {
 }
 
 export async function enroll(userId, slug) {
-  const lab = await prisma.lab.findFirst({ where: { slug, status: 'PUBLISHED' }, select: { id: true } })
+  const lab = await prisma.lab.findFirst({ where: { slug, status: 'PUBLISHED' }, select: { id: true, isPremium: true } })
   if (!lab) throw labNotFound()
+  if (lab.isPremium && !(await hasPremiumAccess(userId))) throw premiumRequired()
   const existing = await prisma.labEnrollment.findUnique({ where: { userId_labId: { userId, labId: lab.id } } })
   let enrollment = existing
   if (!existing) {
@@ -118,13 +121,14 @@ export async function workspace(userId, slug) {
   if (!lab) throw labNotFound()
   const enrollment = await enrollmentOf(userId, lab.id)
   if (!enrollment) throw notEnrolled()
+  if (lab.isPremium && !(await hasPremiumAccess(userId))) throw premiumRequired()
 
   const progress = await prisma.labStepProgress.findMany({ where: { labEnrollmentId: enrollment.id, completed: true }, select: { labStepId: true, completedAt: true } })
   const completedAt = new Map(progress.map((p) => [p.labStepId, p.completedAt]))
   const ids = new Set(completedAt.keys())
 
   return {
-    lab: { id: lab.id, title: lab.title, slug: lab.slug, description: lab.description, difficulty: lab.difficulty, prerequisites: lab.prerequisites ?? '', estimatedMinutes: lab.estimatedMinutes },
+    lab: { id: lab.id, title: lab.title, slug: lab.slug, description: lab.description, difficulty: lab.difficulty, isPremium: lab.isPremium, prerequisites: lab.prerequisites ?? '', estimatedMinutes: lab.estimatedMinutes },
     enrollment: { id: enrollment.id, status: enrollment.status, completedAt: enrollment.completedAt },
     progress: summarizeSteps(lab.steps, ids),
     resources: lab.resources.map(resourceView),
@@ -142,10 +146,11 @@ export async function workspace(userId, slug) {
 
 /** Tick or untick a step. The lab flips between ACTIVE and COMPLETED to match. */
 export async function setStepProgress(userId, stepId, completed) {
-  const step = await prisma.labStep.findFirst({ where: { id: stepId, lab: { status: { in: LEARNABLE } } }, select: { id: true, labId: true } })
+  const step = await prisma.labStep.findFirst({ where: { id: stepId, lab: { status: { in: LEARNABLE } } }, select: { id: true, labId: true, lab: { select: { isPremium: true } } } })
   if (!step) throw stepNotFound()
   const enrollment = await enrollmentOf(userId, step.labId)
   if (!enrollment) throw notEnrolled()
+  if (step.lab.isPremium && !(await hasPremiumAccess(userId))) throw premiumRequired()
 
   const key = { labEnrollmentId_labStepId: { labEnrollmentId: enrollment.id, labStepId: stepId } }
   const data = { completed, completedAt: completed ? new Date() : null }

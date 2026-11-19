@@ -99,6 +99,20 @@ Modules share the database but not business logic.
 | `GET /labs/:slug/enrollment`, `POST/DELETE /labs/:slug/enroll` | signed in | Join (idempotent) and leave a lab; ticked steps are kept |
 | `GET /labs/:slug/work` | joined | The workspace: instructions, videos, links and the student's ticks |
 | `PUT /labs/steps/:stepId/progress` | joined | Tick or untick a step (`{ completed }`); returns progress and the lab's status |
+| `GET /plans` | public | Active subscription plans (name, price, currency, length) |
+| `GET /payment-info` | signed in | The bank details students pay into (admin-editable) |
+| `POST /subscriptions/quote` | signed in | Price for a plan with an optional voucher; creates nothing (30 tries / 10 min per user) |
+| `POST /subscriptions` | signed in | Subscribe. A free price activates at once; otherwise it is `PENDING` until a screenshot is approved. One unpaid request at a time |
+| `GET /subscriptions/me` | signed in | Current access, the pending request with its screenshots, queued plans and history |
+| `POST /subscriptions/:id/cancel` | owner | Cancel a request that is waiting for payment (gives a voucher use back) |
+| `POST /subscriptions/:id/payment-proof?reference=` | owner | Upload a JPEG/PNG/WebP screenshot as the raw body (max 5 MB) |
+| `GET/POST/PATCH/DELETE /admin/plans` | admin | Manage plans; plans students bought are deactivated, not deleted |
+| `GET/POST/PATCH/DELETE /admin/vouchers` | admin | Manage percentage vouchers (see rules below) |
+| `GET/PUT /admin/settings/payment` | admin | Bank name, account holder, number, branch and instructions |
+| `GET /admin/subscriptions?status=&q=` | admin | Payment queue: `PENDING`, `ACTIVE`, `UPCOMING`, `EXPIRED`, `CANCELLED` |
+| `POST /admin/subscriptions/:id/approve`, `/reject`, `/revoke` | admin | Approve a screenshot (starts the plan), reject with a reason, or end an active plan |
+| `GET /admin/payment-proofs/:id/file` | admin | The screenshot image (never public, never cached) |
+| `GET /admin/exports/subscriptions.xlsx` | admin | Excel: every subscription with price, discount, voucher and dates |
 | `GET/PUT /admin/courses/:id/exam-policy` | admin | Unlock rules: `requireAllLessons`, `requireModuleQuizzes`, `lessonWatchThresholdPct` (defaults apply when no row exists) |
 
 A disabled user is locked out immediately: the next API call returns `403 ACCOUNT_DISABLED`,
@@ -179,6 +193,39 @@ and the login screen shows the message without keeping a session.
   Progress counts only steps that currently exist, so adding or removing steps never pushes it past 100 %.
 - Labs have no quizzes or exams. Dashboard and exports reuse the same progress numbers.
 
+**Subscriptions, vouchers and payments (Phase 10)**
+
+- **What is Premium:** an admin marks courses (`is_free = false`), lessons, quizzes, the final exam and labs as Premium; anything
+  not marked stays free. A non-free course makes all its lessons, quizzes and exam Premium, except lessons flagged *free preview*.
+  Any **active subscription unlocks all Premium content**. Administrators are never locked out.
+- **Enforcement is on the server**, in one place (`subscriptions/access.service.js`): a locked lesson answers
+  `403 PREMIUM_REQUIRED` and **never includes its video id**; progress cannot be saved on it; a locked quiz or exam cannot be
+  started or resumed; a premium lab cannot be joined, opened or ticked. Public syllabus and catalog pages only show lock flags.
+  Access is by date: a subscription counts while `starts_at <= now < ends_at` and its status is `ACTIVE`, so expiry needs no cron job
+  and content re-locks the moment a plan ends. Work already done (progress, ticked steps, quiz results) is kept.
+- **Payment flow (no payment gateway):** the student picks a plan and may apply a voucher, then sees the bank details and pays by
+  transfer, and uploads a screenshot. An admin looks at it and **approves** (the plan starts, or queues behind the current one so paid
+  days are never wasted) or **rejects with a reason** the student can read; a rejected request stays open for a new screenshot.
+  Approving needs a screenshot to approve, which is the audit trail (`reviewed_by`, `reviewed_at`). Two admins approving at the same
+  moment activate it once.
+- **Prices are snapshotted** on the subscription (plan name, length, currency, original and final amount, discount), so later plan
+  or voucher edits never change what a student owes. Money is calculated in integer cents and rounded half up to the cent. The
+  currency is a per-plan code chosen by the admin.
+- **Vouchers** are percentage-only (1 to 100; **100 % is a free voucher** that activates the plan at once with no payment). Optional
+  start and end (the end is exclusive), a total-use limit, a per-student limit (default 1) and optional restriction to chosen plans
+  (none means every plan). A use is counted while its subscription is `PENDING` or `ACTIVE`; cancelling gives it back. The use limit is
+  enforced under a row lock (`SELECT ... FOR UPDATE`), so the last use cannot be handed out twice. **Every way a code can fail
+  (unknown, switched off, expired, not started, wrong plan, sold out, already used) returns the same message**, and quotes and purchases
+  are rate-limited per user, so codes cannot be probed. Once a voucher is used its discount cannot change, and it cannot be deleted
+  (deactivate it).
+- **Screenshots:** only JPEG, PNG and WebP, decided from the file's **bytes** (HTML, SVG, PDF or a mismatching header are refused),
+  at most 5 MB, at most 5 per request, and a new one is refused while one is waiting for review. Files are stored under server-generated
+  keys (`payments/<uuid>.<ext>`) behind `shared/storage.js`, in the private `UPLOAD_DIR` (git-ignored, never served as static files).
+  Admins view them through an authenticated endpoint with `Cache-Control: private, no-store` and `X-Content-Type-Options: nosniff`.
+  **At deployment** replace `shared/storage.js` with an S3-backed version (a private, tagged bucket; confirm with the owner first).
+- Not built: automatic renewals, refunds beyond "revoke", emails to students (approval and rejection are shown in the app), and
+  per-plan content bundles (any plan unlocks all Premium content).
+
 **Excel import and export (Phase 8)**
 
 - Exports are generated on demand with `exceljs`, sent as `attachment` with `Cache-Control: no-store` (they contain personal
@@ -213,6 +260,7 @@ and the login screen shows the message without keeping a session.
 6. Module quizzes + question management — done (Excel import/export is Phase 8)
 7. Final exam + locking — done
 8. Reports, Excel exports and question import — done
-9. CloudArt Labs  ← **this phase**
-10. Client service requests
-11. AWS production deployment
+9. CloudArt Labs — done
+10. Subscriptions, vouchers and bank-transfer payments (premium content)  ← **this phase**
+11. Client service requests
+12. AWS production deployment

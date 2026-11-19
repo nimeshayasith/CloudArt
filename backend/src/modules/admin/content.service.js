@@ -34,6 +34,7 @@ const lessonShape = (l) => ({
   durationSeconds: l.durationSeconds,
   sortOrder: l.sortOrder,
   isPreview: l.isPreview,
+  isPremium: l.isPremium,
   isPublished: l.isPublished,
 })
 
@@ -239,6 +240,7 @@ export async function createLesson(moduleId, input) {
       youtubeVideoId: videoIdOrThrow(input.video),
       durationSeconds: input.durationSeconds ?? 0,
       isPreview: input.isPreview ?? false,
+      isPremium: input.isPremium ?? false,
       sortOrder: (last._max.sortOrder ?? -1) + 1,
     },
   })
