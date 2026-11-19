@@ -2,7 +2,9 @@ import { useEffect, useState } from 'react'
 import { Link } from 'react-router-dom'
 import AppShell, { LoadError, Loading, Panel, StatCard } from '../components/AppShell'
 import { inputClass } from '../components/AuthLayout'
+import ExportButton from '../components/ExportButton'
 import { authedApi } from '../lib/api'
+import { stamp } from '../lib/download'
 
 const PAGE_SIZE = 10
 const fmt = (iso) => new Date(iso).toLocaleDateString(undefined, { year: 'numeric', month: 'short', day: 'numeric' })
@@ -129,7 +131,15 @@ function Users() {
   }
 
   return (
-    <Panel title="Users" action={data && <span className="text-xs text-ca-muted">{data.total} total</span>}>
+    <Panel
+      title="Users"
+      action={
+        <span className="flex items-center gap-3">
+          {data && <span className="text-xs text-ca-muted">{data.total} total</span>}
+          <ExportButton path="/admin/exports/users.xlsx" filename={`cloudart-users-${stamp()}.xlsx`}>Export users (Excel)</ExportButton>
+        </span>
+      }
+    >
       <label htmlFor="user-search" className="sr-only">Search users</label>
       <input id="user-search" type="search" placeholder="Search name, username, email or organization" className={inputClass} value={q} onChange={(e) => setQ(e.target.value)} />
       <div className="mt-3">

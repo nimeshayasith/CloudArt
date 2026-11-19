@@ -4,6 +4,7 @@ import { requireAdmin, requireAuth } from '../../middleware/auth.js'
 import { HttpError } from '../../shared/httpError.js'
 import { validateBody } from '../auth/auth.validation.js'
 import * as admin from './admin.service.js'
+import { exportRouter } from '../exports/export.routes.js'
 import { contentRouter } from './content.routes.js'
 import { quizAdminRouter } from './quiz.routes.js'
 
@@ -11,6 +12,7 @@ export const adminRouter = Router()
 adminRouter.use(requireAuth, requireAdmin)
 adminRouter.use(contentRouter)
 adminRouter.use(quizAdminRouter)
+adminRouter.use(exportRouter)
 
 const wrap = (fn) => (req, res, next) => fn(req, res).catch(next)
 

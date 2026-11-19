@@ -18,17 +18,21 @@ export const tokenStore = {
   clear: () => localStorage.removeItem(KEY),
 }
 
-async function raw(path, { method = 'GET', body, token } = {}) {
+async function raw(path, { method = 'GET', body, token, blob = false, file } = {}) {
   let res
   try {
     res = await fetch(`${BASE}${path}`, {
       method,
-      headers: { 'Content-Type': 'application/json', ...(token ? { Authorization: `Bearer ${token}` } : {}) },
-      body: body ? JSON.stringify(body) : undefined,
+      headers: {
+        'Content-Type': file ? (file.type || 'application/octet-stream') : 'application/json',
+        ...(token ? { Authorization: `Bearer ${token}` } : {}),
+      },
+      body: file ?? (body ? JSON.stringify(body) : undefined),
     })
   } catch {
     throw new ApiError(0, 'NETWORK', 'Cannot reach the server. Check your connection and try again.')
   }
+  if (blob && res.ok) return res.blob() // a file download, not JSON
   const data = await res.json().catch(() => ({}))
   if (!res.ok) throw new ApiError(res.status, data.error?.code, data.error?.message ?? 'Request failed', data.error?.details)
   return data
@@ -55,3 +59,9 @@ export async function authedApi(path, opts = {}) {
     return raw(path, { ...opts, token: tokens.idToken })
   }
 }
+
+/** Authenticated file download (e.g. an Excel export) as a Blob. */
+export const authedBlob = (path) => authedApi(path, { blob: true })
+
+/** Authenticated upload of a file as the raw request body (e.g. an Excel import). */
+export const authedUpload = (path, file) => authedApi(path, { method: 'POST', file })

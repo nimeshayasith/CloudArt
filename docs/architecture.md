@@ -84,6 +84,12 @@ Modules share the database but not business logic.
 | `PUT /learn/attempts/:attemptId/answers` | owner | Autosave answers (120 requests/min per user) |
 | `POST /learn/attempts/:attemptId/submit` | owner | Submit (optionally with the final answers); idempotent |
 | `POST /admin/courses/:id/final-exam` | admin | Create the course's final exam (one per course; defaults 65 questions, 90 min, 3 attempts, 70 %) |
+| `GET /admin/exports/users.xlsx` | admin | Excel: every user (no Cognito ids), role, status, courses enrolled |
+| `GET /admin/exports/courses/:id/progress.xlsx` | admin | Excel: every enrollee with lessons done, progress %, last activity and best quiz/exam scores |
+| `GET /admin/exports/quizzes/:id/results.xlsx` | admin | Excel: every attempt with score, percentage and result |
+| `GET /admin/quizzes/:id/questions/export.xlsx` | admin | Excel: the question bank in the importable layout (includes the answer key) |
+| `GET /admin/question-template.xlsx` | admin | Excel: blank template with three worked examples and instructions |
+| `POST /admin/quizzes/:id/questions/import` | admin | Add questions from an uploaded `.xlsx` (raw request body, max 2 MB / 500 rows). All or nothing |
 | `GET/PUT /admin/courses/:id/exam-policy` | admin | Unlock rules: `requireAllLessons`, `requireModuleQuizzes`, `lessonWatchThresholdPct` (defaults apply when no row exists) |
 
 A disabled user is locked out immediately: the next API call returns `403 ACCOUNT_DISABLED`,
@@ -147,6 +153,25 @@ and the login screen shows the message without keeping a session.
 - Time limit, attempt limit, expiry, snapshotting and locking of used questions work exactly as for module quizzes.
 - There is no certificate yet.
 
+**Excel import and export (Phase 8)**
+
+- Exports are generated on demand with `exceljs`, sent as `attachment` with `Cache-Control: no-store` (they contain personal
+  data) and are admin-only. The browser downloads them with the sign-in token and saves the blob, so no unauthenticated
+  download links exist.
+- **Formula injection:** text that comes from users (names, organizations, question wording) is written with a leading
+  apostrophe when it starts with `=`, `+`, `-`, `@`, tab or carriage return, so Excel never evaluates it. The importer
+  removes exactly that apostrophe again, so an export can be edited and re-imported without changing the data.
+- **Question import layout:** columns `Question`, `Type`, `Marks`, `Correct options`, `Explanation`, `Option 1`..`Option 8`.
+  Columns are found by header name (order is free). `Type` accepts `Single choice`, `Multiple select`, `True/False` (and
+  the enum names). `Correct options` lists option *numbers*, e.g. `2` or `1,3`.
+- **All or nothing:** every row is validated with the same rules as the admin form. If any row is wrong nothing is
+  imported and the response lists up to 50 problem rows (`400 IMPORT_INVALID`, `details.rows`). Import appends to the
+  quiz's existing questions. Limits: 500 rows and 2 MB per file; unreadable files get `400 INVALID_FILE`.
+- The upload is the raw request body (no multipart parser). Only admins can upload, so zip-bomb style files are not
+  considered a threat model here, but the size cap still applies.
+- `backend/package.json` pins `uuid` to `^11.1.1` through `overrides`, because `exceljs` 4.4 depends on an old `uuid`
+  with an advisory. `npm audit` reports 0 vulnerabilities; the round trip is covered by tests.
+
 ## Environments
 
 - Local: Docker Compose PostgreSQL (`docker-compose.yml`), `backend/.env`.
@@ -160,8 +185,8 @@ and the login screen shows the message without keeping a session.
 4. Categories, courses, modules, lessons — done
 5. Enrollment, YouTube player, resume-where-you-left-off — done
 6. Module quizzes + question management — done (Excel import/export is Phase 8)
-7. Final exam + locking  ← **this phase**
-8. Reports and exports
+7. Final exam + locking — done
+8. Reports, Excel exports and question import  ← **this phase**
 9. CloudArt Labs
 10. Client service requests
 11. AWS production deployment

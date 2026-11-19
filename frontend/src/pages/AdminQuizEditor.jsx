@@ -3,9 +3,11 @@ import { Link, useNavigate, useParams } from 'react-router-dom'
 import AppShell, { LoadError, Loading, Panel } from '../components/AppShell'
 import { Field, FormError, inputClass } from '../components/AuthLayout'
 import ConfirmButton from '../components/ConfirmButton'
+import ExportButton from '../components/ExportButton'
 import StatusBadge from '../components/StatusBadge'
-import { authedApi } from '../lib/api'
+import { authedApi, authedUpload } from '../lib/api'
 import { QUESTION_TYPE_LABEL } from '../lib/courseConstants'
+import { stamp } from '../lib/download'
 import { plural } from '../lib/format'
 import { goldBtn, smallBtn } from '../lib/ui'
 
@@ -297,6 +299,54 @@ function QuestionRow({ question: q, index, count, busy, act, move }) {
   )
 }
 
+// ───────────────────────────── import / export ─────────────────────────────
+
+const XLSX_TYPES = '.xlsx,application/vnd.openxmlformats-officedocument.spreadsheetml.sheet'
+
+function ImportQuestions({ quizId, onImported }) {
+  const [busy, setBusy] = useState(false)
+  const [result, setResult] = useState('')
+  const [problem, setProblem] = useState(null)
+
+  const choose = async (e) => {
+    const file = e.target.files?.[0]
+    e.target.value = '' // allows choosing the same file again after fixing it
+    if (!file) return
+    setBusy(true)
+    setResult('')
+    setProblem(null)
+    try {
+      const d = await authedUpload(`/admin/quizzes/${quizId}/questions/import`, file)
+      setResult(`Imported ${plural(d.imported, 'question')}.`)
+      await onImported()
+    } catch (ex) {
+      setProblem({ message: ex.message, rows: ex.details?.rows ?? [] })
+    } finally {
+      setBusy(false)
+    }
+  }
+
+  return (
+    <div className="w-full space-y-2">
+      <label className={`${smallBtn} inline-block cursor-pointer focus-within:ring-2 focus-within:ring-ca-gold`}>
+        {busy ? 'Importing…' : 'Import from Excel'}
+        <input type="file" accept={XLSX_TYPES} className="sr-only" onChange={choose} disabled={busy} aria-label="Import questions from an Excel file" />
+      </label>
+      {result && <p role="status" className="text-sm text-emerald-300">{result}</p>}
+      {problem && (
+        <div role="alert" className="rounded-xl border border-red-500/40 bg-red-500/10 p-3 text-sm text-red-300">
+          <p>{problem.message}</p>
+          {problem.rows.length > 0 && (
+            <ul className="mt-2 list-disc pl-5 space-y-0.5" data-testid="import-errors">
+              {problem.rows.map((r) => <li key={r.row}>Row {r.row}: {r.message}</li>)}
+            </ul>
+          )}
+        </div>
+      )}
+    </div>
+  )
+}
+
 // ───────────────────────────── results ─────────────────────────────
 
 function Results({ quizId }) {
@@ -313,7 +363,15 @@ function Results({ quizId }) {
   }, [quizId, page, reloadKey])
 
   return (
-    <Panel title="Student results" action={data && <span className="text-xs text-ca-muted">{plural(data.total, 'attempt')}</span>}>
+    <Panel
+      title="Student results"
+      action={
+        <span className="flex items-center gap-3">
+          {data && <span className="text-xs text-ca-muted">{plural(data.total, 'attempt')}</span>}
+          <ExportButton path={`/admin/exports/quizzes/${quizId}/results.xlsx`} filename={`cloudart-results-${stamp()}.xlsx`}>Export results (Excel)</ExportButton>
+        </span>
+      }
+    >
       {error && <LoadError message={error} onRetry={() => { setError(''); setReloadKey((k) => k + 1) }} />}
       {!error && !data && <Loading label="Loading results…" />}
       {data && data.attempts.length === 0 && <p className="text-sm text-ca-muted">No one has attempted this quiz yet.</p>}
@@ -438,7 +496,12 @@ export default function AdminQuizEditor() {
         <Panel title="Settings"><SettingsForm quiz={quiz} onSaved={setQuiz} /></Panel>
 
         <Panel title="Questions" action={<span className="text-xs text-ca-muted">{quiz.activeQuestions} active of {plural(quiz.questions.length, 'question')}</span>}>
-          {quiz.questions.length === 0 && !adding && <p className="mb-4 text-sm text-ca-muted">No questions yet. Add the first one below.</p>}
+          <div className="mb-4 flex flex-wrap items-center gap-2" data-testid="question-tools">
+            <ExportButton path={`/admin/quizzes/${id}/questions/export.xlsx`} filename={`cloudart-questions-${stamp()}.xlsx`}>Export questions (Excel)</ExportButton>
+            <ExportButton path="/admin/question-template.xlsx" filename="cloudart-question-template.xlsx">Download template</ExportButton>
+            <ImportQuestions quizId={id} onImported={() => act(null)} />
+          </div>
+          {quiz.questions.length === 0 && !adding && <p className="mb-4 text-sm text-ca-muted">No questions yet. Add the first one below, or import many at once from Excel.</p>}
           <ul className="divide-y divide-white/10 mb-4">
             {quiz.questions.map((q, i) => <QuestionRow key={q.id} question={q} index={i} count={quiz.questions.length} busy={busy} act={act} move={move} />)}
           </ul>

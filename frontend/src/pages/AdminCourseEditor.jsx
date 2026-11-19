@@ -3,9 +3,11 @@ import { Link, useNavigate, useParams } from 'react-router-dom'
 import AppShell, { LoadError, Loading, Panel } from '../components/AppShell'
 import { Field, FormError, inputClass } from '../components/AuthLayout'
 import ConfirmButton from '../components/ConfirmButton'
+import ExportButton from '../components/ExportButton'
 import StatusBadge from '../components/StatusBadge'
 import { authedApi } from '../lib/api'
 import { DIFFICULTIES } from '../lib/courseConstants'
+import { stamp } from '../lib/download'
 import { formatDuration, plural, pretty } from '../lib/format'
 import { goldBtn, smallBtn } from '../lib/ui'
 
@@ -478,6 +480,7 @@ export default function AdminCourseEditor() {
             {course.status === 'PUBLISHED' && <button type="button" disabled={busy} onClick={() => setStatus('DRAFT')} className={smallBtn}>Unpublish (back to draft)</button>}
             {course.status !== 'ARCHIVED' && <button type="button" disabled={busy} onClick={() => setStatus('ARCHIVED')} className={smallBtn}>Archive</button>}
             {course.status === 'PUBLISHED' && <Link to={`/courses/${course.slug}`} className="text-sm text-ca-gold hover:underline">View public page →</Link>}
+            <ExportButton path={`/admin/exports/courses/${course.id}/progress.xlsx`} filename={`cloudart-progress-${course.slug}-${stamp()}.xlsx`}>Export student progress (Excel)</ExportButton>
             <span className="ml-auto">
               <ConfirmButton
                 label="Delete course"
