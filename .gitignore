@@ -40,3 +40,6 @@ frontend/playwright-report/
 !*.tfvars.example
 crash.log
 tfplan
+
+# Release archives made by deploy/aws/05-ship.sh
+deploy/.build/

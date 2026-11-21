@@ -16,11 +16,14 @@ INSTANCE=$(cd $TF && terraform output -raw server_instance_id)
 KEY=artifacts/cloudart-$RELEASE.tar.gz
 
 say "Archive release $RELEASE (backend/ and deploy/ only) and upload to s3://$BUCKET/$KEY"
-# The redirect (not "git archive -o") is deliberate: the Windows build of git cannot write to Git Bash's /tmp (error E10).
-git archive --format=tar.gz HEAD backend deploy > "/tmp/cloudart-$RELEASE.tar.gz"
-ls -l "/tmp/cloudart-$RELEASE.tar.gz" | awk '{print "  size: " $5 " bytes"}'
-retry aws s3 cp "/tmp/cloudart-$RELEASE.tar.gz" "s3://$BUCKET/$KEY" --only-show-errors
-rm -f "/tmp/cloudart-$RELEASE.tar.gz"
+# The archive is written to a git-ignored folder inside the repo and addressed with a RELATIVE path. "/tmp" is a Git Bash
+# virtual folder that Windows programs (git.exe, aws.exe) cannot see, and lib.sh turns path translation off (error E10).
+mkdir -p deploy/.build
+OUT=deploy/.build/cloudart-$RELEASE.tar.gz
+git archive --format=tar.gz -o "$OUT" HEAD backend deploy
+ls -l "$OUT" | awk '{print "  size: " $5 " bytes"}'
+retry aws s3 cp "$OUT" "s3://$BUCKET/$KEY" --only-show-errors
+rm -f "$OUT"
 
 say "Wait until the server is managed by SSM (it needs a minute after first boot)"
 for i in $(seq 1 40); do
