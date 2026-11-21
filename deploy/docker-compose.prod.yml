@@ -39,4 +39,6 @@ services:
       options:
         awslogs-region: ${AWS_REGION}
         awslogs-group: ${LOG_GROUP}
-        awslogs-stream: api
+        # No fixed stream name: each container gets its own stream (named from this tag). A shared name made the
+        # short-lived migrate/seed containers and the running API collide and the API's lines were lost (error E12).
+        tag: "{{.Name}}-{{.ID}}"
