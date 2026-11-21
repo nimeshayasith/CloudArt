@@ -1,0 +1,40 @@
+# Option A: one EC2 server runs the API and PostgreSQL in Docker.
+#
+# Copy this file and your filled-in .env.prod (see .env.prod.example) to the server, then:
+#   docker compose --env-file .env.prod -f docker-compose.prod.yml up -d
+#
+# Only the API is reachable from outside (port 80, and only from CloudFront); PostgreSQL has no published port.
+services:
+  db:
+    image: postgres:16-alpine
+    restart: unless-stopped
+    environment:
+      POSTGRES_USER: ${POSTGRES_USER}
+      POSTGRES_PASSWORD: ${POSTGRES_PASSWORD}
+      POSTGRES_DB: ${POSTGRES_DB}
+    volumes:
+      - /data/postgres:/var/lib/postgresql/data   # the separate EBS data disk, mounted at /data
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U ${POSTGRES_USER} -d ${POSTGRES_DB}"]
+      interval: 10s
+      timeout: 5s
+      retries: 10
+    logging:
+      driver: json-file
+      options: { max-size: "10m", max-file: "3" }
+
+  api:
+    image: ${API_IMAGE}                              # the image pushed to your private ECR repository
+    restart: unless-stopped
+    depends_on:
+      db:
+        condition: service_healthy
+    env_file: .env.prod
+    ports:
+      - "80:4000"
+    logging:                                         # to CloudWatch Logs through the server's IAM role
+      driver: awslogs
+      options:
+        awslogs-region: ${AWS_REGION}
+        awslogs-group: ${LOG_GROUP}
+        awslogs-stream: api

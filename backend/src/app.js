@@ -2,6 +2,9 @@ import cors from 'cors'
 import express from 'express'
 import helmet from 'helmet'
 import { env } from './config/env.js'
+import { applyTrustProxy } from './config/proxy.js'
+import { accessLog } from './middleware/accessLog.js'
+import { originVerify } from './middleware/originVerify.js'
 import { errorHandler, notFound } from './middleware/errorHandler.js'
 import { adminRouter } from './modules/admin/admin.routes.js'
 import { authRouter } from './modules/auth/auth.routes.js'
@@ -16,6 +19,9 @@ import { userRouter } from './modules/users/user.routes.js'
 export function createApp() {
   const app = express()
   app.disable('x-powered-by')
+  applyTrustProxy(app, env.TRUST_PROXY)
+  if (env.NODE_ENV !== 'test') app.use(accessLog())
+  app.use(originVerify(env.ORIGIN_VERIFY_SECRET))
   app.use(helmet())
   app.use(cors({ origin: env.CORS_ORIGIN.split(','), credentials: true }))
   app.use(express.json({ limit: '1mb' }))

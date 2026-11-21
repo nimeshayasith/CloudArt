@@ -295,7 +295,24 @@ and the login screen shows the message without keeping a session.
 ## Environments
 
 - Local: Docker Compose PostgreSQL (`docker-compose.yml`), `backend/.env`.
-- Production: AWS (RDS PostgreSQL, Cognito, S3) — see `deployment.md` (later phase).
+- Production: **Option A** from [`deployment-options.md`](deployment-options.md): CloudFront in front of an S3 bucket (the site) and one EC2
+  server (the API and PostgreSQL in Docker), uploads in a private S3 bucket, a separate production Cognito pool. Server files live in `deploy/`.
+
+**Production readiness rules (Phase 12)**
+
+- The API refuses to start in production unless `STORAGE_DRIVER=s3` (with `S3_BUCKET`), `TRUST_PROXY`, `ORIGIN_VERIFY_SECRET` (at least 24
+  characters) and a non-localhost `CORS_ORIGIN` are set; all problems are listed at once (`config/env.js`).
+- **Files:** `shared/storage.js` has a local driver (development, tests) and an S3 driver. Both generate the key (`payments|requests/<uuid>.<ext>`),
+  validate it before every read, write or delete, and never overwrite. S3 objects are encrypted (SSE-S3) and the bucket stays private; files
+  are only ever downloaded through the API.
+- **Proxy trust:** `TRUST_PROXY` is the number of reverse proxies in front of the API. Express then uses the address the nearest proxy added, so a
+  visitor cannot fake their address with `X-Forwarded-For`, and per-IP rate limits count real visitors.
+- **Origin check:** `middleware/originVerify.js` refuses (403) any request without the secret `X-Origin-Verify` header, which only the CloudFront
+  distribution adds. `GET /api/v1/health` stays open for the container health check.
+- **Logs:** `middleware/accessLog.js` prints one JSON line per request (no query string, headers, bodies or user).
+- **Database TLS:** `DB_SSL=off|require|verify` (`verify` needs `DB_SSL_CA_FILE`); off is right for a database on the same machine.
+- **Image:** `backend/Dockerfile` (non-root, health check). Migrations and the seed run from the same image:
+  `./node_modules/.bin/prisma migrate deploy` and `node prisma/seed.js`.
 
 ## Roadmap
 
@@ -309,5 +326,5 @@ and the login screen shows the message without keeping a session.
 8. Reports, Excel exports and question import — done
 9. CloudArt Labs — done
 10. Subscriptions, vouchers and bank-transfer payments (premium content) — done
-11. Client service requests  ← **this phase**
-12. AWS production deployment
+11. Client service requests — done
+12. AWS production deployment  ← **this phase** (Option A; readiness code done, manual walkthrough stage by stage)

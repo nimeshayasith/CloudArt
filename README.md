@@ -8,9 +8,10 @@
 | --- | --- |
 | `frontend/` | React 19 + Vite + Tailwind (public site; app screens come next) |
 | `backend/` | Node.js + Express API (modular monolith) + Prisma + PostgreSQL |
-| `docs/` | `architecture.md`, `database-design.md` |
+| `docs/` | `architecture.md`, `database-design.md`, `deployment-options.md`, `aws-resources.md` |
+| `deploy/` | Production server files (Docker Compose and settings example) |
 | `docker-compose.yml` | Local PostgreSQL |
-| `amplify.yml` | Amplify build spec (builds `frontend/`) |
+| `amplify.yml` | Amplify build spec (builds `frontend/`); not used by the chosen deployment (S3 + CloudFront) |
 
 ## Run locally
 
