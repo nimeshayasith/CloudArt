@@ -31,3 +31,12 @@ _private/
 !.env.*.example
 frontend/test-results/
 frontend/playwright-report/
+
+# Terraform: local working files and state (the real state lives in the private S3 state bucket) and personal variable files
+**/.terraform/
+*.tfstate
+*.tfstate.*
+*.tfvars
+!*.tfvars.example
+crash.log
+tfplan

@@ -1,0 +1,10 @@
+# Files that run on Linux (or are read by Linux tools) must keep LF line endings even when checked out on Windows.
+# Without this, Git on Windows can rewrite them with CRLF and a "\r" ends up inside shell commands and settings values.
+*.sh      text eol=lf
+*.tf      text eol=lf
+*.tftpl   text eol=lf
+*.tfvars  text eol=lf
+Dockerfile text eol=lf
+*.yml     text eol=lf
+*.service text eol=lf
+*.timer   text eol=lf

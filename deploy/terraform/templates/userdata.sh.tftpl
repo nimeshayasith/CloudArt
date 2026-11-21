@@ -1,0 +1,115 @@
+#!/bin/bash
+# First-boot setup of the CloudArt server (Amazon Linux 2023, ARM). Runs ONCE as root when the instance is first created.
+# It prepares the machine (Docker, disks, swap, backups, monitoring, automatic security updates). It contains NO secrets:
+# the application and its settings are delivered later by deploy/server/deploy.sh over SSM.
+# Everything it prints is kept in /var/log/cloudart-bootstrap.log.
+set -euxo pipefail
+exec > >(tee /var/log/cloudart-bootstrap.log) 2>&1
+
+# ── 1. Packages: Docker, the CloudWatch agent, automatic security updates, XFS tools
+dnf -y install docker amazon-cloudwatch-agent dnf-automatic xfsprogs
+
+# Rotate container logs so they can never fill the disk (the compose file also sets limits).
+mkdir -p /etc/docker
+cat > /etc/docker/daemon.json <<'JSON'
+{ "log-driver": "json-file", "log-opts": { "max-size": "10m", "max-file": "3" }, "live-restore": true }
+JSON
+systemctl enable --now docker
+
+# Docker Compose is not in the Amazon Linux repositories, so install the pinned release and verify its checksum.
+COMPOSE_VERSION=v2.32.4
+PLUGIN_DIR=/usr/libexec/docker/cli-plugins
+mkdir -p "$PLUGIN_DIR"
+curl -fsSL "https://github.com/docker/compose/releases/download/$COMPOSE_VERSION/docker-compose-linux-aarch64" -o "$PLUGIN_DIR/docker-compose"
+curl -fsSL "https://github.com/docker/compose/releases/download/$COMPOSE_VERSION/docker-compose-linux-aarch64.sha256" -o /tmp/compose.sha256
+(cd "$PLUGIN_DIR" && echo "$(cut -d' ' -f1 /tmp/compose.sha256)  docker-compose" | sha256sum -c -)
+chmod +x "$PLUGIN_DIR/docker-compose"
+docker compose version
+
+# ── 2. Swap (2 GB): the machine has little memory; swap turns a sudden out-of-memory kill into a slowdown.
+if [ ! -f /swapfile ]; then
+  dd if=/dev/zero of=/swapfile bs=1M count=2048
+  chmod 600 /swapfile
+  mkswap /swapfile
+  echo '/swapfile none swap sw 0 0' >> /etc/fstab
+fi
+swapon -a
+
+# ── 3. The database disk: wait for it, format it only if it is brand new, mount it at /data.
+DEV=/dev/disk/by-id/nvme-Amazon_Elastic_Block_Store_${data_volume_id}
+for i in $(seq 1 60); do [ -e "$DEV" ] && break; sleep 2; done
+[ -e "$DEV" ] || { echo "data disk did not appear"; exit 1; }
+# NOTE: an XFS label may be at most 12 characters (see error E8 in the deployment log).
+if ! blkid "$DEV" >/dev/null 2>&1; then
+  mkfs.xfs -L cloudartdata "$DEV"
+fi
+mkdir -p /data
+grep -q 'LABEL=cloudartdata' /etc/fstab || echo 'LABEL=cloudartdata /data xfs defaults,nofail 0 2' >> /etc/fstab
+mount -a
+mkdir -p /data/postgres /opt/cloudart
+
+# ── 4. Nightly database backup to S3 (and a "backup succeeded" metric, which has an alarm if it goes missing)
+cat > /usr/local/bin/cloudart-backup.sh <<'SCRIPT'
+#!/bin/bash
+set -euo pipefail
+ENVF=/opt/cloudart/.env.prod
+[ -f "$ENVF" ] || { echo "no $ENVF yet, nothing to back up"; exit 0; }
+get() { grep "^$1=" "$ENVF" | head -1 | cut -d= -f2-; }
+POSTGRES_USER=$(get POSTGRES_USER); POSTGRES_DB=$(get POSTGRES_DB); BACKUP_BUCKET=$(get BACKUP_BUCKET)
+REGION=$(get AWS_REGION)
+TMP=$(mktemp /tmp/cloudart-dump.XXXXXX)
+trap 'rm -f "$TMP"' EXIT
+cd /opt/cloudart
+docker compose --env-file "$ENVF" -f docker-compose.prod.yml exec -T db pg_dump -U "$POSTGRES_USER" -d "$POSTGRES_DB" --no-owner | gzip -9 > "$TMP"
+SIZE=$(stat -c %s "$TMP")
+[ "$SIZE" -gt 2000 ] || { echo "dump looks empty ($SIZE bytes), not uploading"; exit 1; }
+KEY="db/cloudart-$(date -u +%Y-%m-%d-%H%M).sql.gz"
+aws s3 cp "$TMP" "s3://$BACKUP_BUCKET/$KEY" --only-show-errors --region "$REGION"
+TOKEN=$(curl -s -X PUT http://169.254.169.254/latest/api/token -H "X-aws-ec2-metadata-token-ttl-seconds: 60")
+IID=$(curl -s -H "X-aws-ec2-metadata-token: $TOKEN" http://169.254.169.254/latest/meta-data/instance-id)
+aws cloudwatch put-metric-data --region "$REGION" --namespace CloudArt/Server --metric-name BackupSuccess --value 1 --dimensions InstanceId="$IID"
+echo "uploaded s3://$BACKUP_BUCKET/$KEY ($SIZE bytes)"
+SCRIPT
+chmod 755 /usr/local/bin/cloudart-backup.sh
+
+cat > /etc/systemd/system/cloudart-backup.service <<'UNIT'
+[Unit]
+Description=CloudArt nightly database backup to S3
+[Service]
+Type=oneshot
+ExecStart=/usr/local/bin/cloudart-backup.sh
+UNIT
+cat > /etc/systemd/system/cloudart-backup.timer <<'UNIT'
+[Unit]
+Description=Run the CloudArt backup every night (02:00 in India)
+[Timer]
+OnCalendar=*-*-* 20:30:00 UTC
+Persistent=true
+[Install]
+WantedBy=timers.target
+UNIT
+systemctl daemon-reload
+systemctl enable --now cloudart-backup.timer
+
+# ── 5. Monitoring: disk and memory numbers to CloudWatch (alarms are in ops.tf)
+cat > /opt/aws/amazon-cloudwatch-agent/etc/amazon-cloudwatch-agent.json <<'JSON'
+{
+  "agent": { "metrics_collection_interval": 60, "run_as_user": "root" },
+  "metrics": {
+    "namespace": "CloudArt/Server",
+    "append_dimensions": { "InstanceId": "$${aws:InstanceId}" },
+    "metrics_collected": {
+      "disk": { "measurement": ["used_percent"], "resources": ["/", "/data"], "drop_device": true },
+      "mem":  { "measurement": ["mem_used_percent"] }
+    }
+  }
+}
+JSON
+/opt/aws/amazon-cloudwatch-agent/bin/amazon-cloudwatch-agent-ctl -a fetch-config -m ec2 -s -c file:/opt/aws/amazon-cloudwatch-agent/etc/amazon-cloudwatch-agent.json
+
+# ── 6. Automatic SECURITY updates (a one-server design must patch itself). A kernel update still needs a reboot.
+sed -i 's/^upgrade_type.*/upgrade_type = security/; s/^apply_updates.*/apply_updates = yes/' /etc/dnf/automatic.conf
+systemctl enable --now dnf-automatic.timer
+
+touch /var/lib/cloudart-bootstrap-done
+echo "bootstrap finished"
