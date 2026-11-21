@@ -16,7 +16,8 @@ INSTANCE=$(cd $TF && terraform output -raw server_instance_id)
 KEY=artifacts/cloudart-$RELEASE.tar.gz
 
 say "Archive release $RELEASE (backend/ and deploy/ only) and upload to s3://$BUCKET/$KEY"
-git archive --format=tar.gz -o "/tmp/cloudart-$RELEASE.tar.gz" HEAD backend deploy
+# The redirect (not "git archive -o") is deliberate: the Windows build of git cannot write to Git Bash's /tmp (error E10).
+git archive --format=tar.gz HEAD backend deploy > "/tmp/cloudart-$RELEASE.tar.gz"
 ls -l "/tmp/cloudart-$RELEASE.tar.gz" | awk '{print "  size: " $5 " bytes"}'
 retry aws s3 cp "/tmp/cloudart-$RELEASE.tar.gz" "s3://$BUCKET/$KEY" --only-show-errors
 rm -f "/tmp/cloudart-$RELEASE.tar.gz"
