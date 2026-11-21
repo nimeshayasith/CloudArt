@@ -16,7 +16,8 @@ DIST=$(cd $TF && terraform output -raw cloudfront_distribution_id)
 URL=$(cd $TF && terraform output -raw site_url)
 
 say "Build (VITE_API_URL=/api/v1)"
-(cd frontend && npm ci --no-audit --no-fund >/dev/null && VITE_API_URL=/api/v1 npm run build 2>&1 | tail -4)
+[ -d frontend/node_modules ] || (cd frontend && npm ci --no-audit --no-fund >/dev/null)   # reuse installed packages if present
+(cd frontend && VITE_API_URL=/api/v1 npm run build 2>&1 | tail -4)
 [ -f frontend/dist/index.html ] || { echo "build produced no index.html"; exit 1; }
 
 say "Upload hashed assets (cached for a year)"
