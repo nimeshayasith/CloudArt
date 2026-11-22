@@ -1,4 +1,4 @@
-# Which Terraform and which providers (plugins) this code needs, and where Terraform keeps its state.
+# Which Terraform and which providers (plugins) this environment needs, and where Terraform keeps its state.
 terraform {
   required_version = ">= 1.10" # 1.10+ can lock the state with a plain S3 file, so no DynamoDB table is needed
 
@@ -7,8 +7,9 @@ terraform {
     random = { source = "hashicorp/random", version = "~> 3.6" }
   }
 
-  # The state file records what Terraform built and contains generated passwords, so it lives in a private,
-  # encrypted, versioned bucket (created by deploy/aws/01-bootstrap-state.sh, the one thing Terraform cannot make for itself).
+  # The state file records what Terraform built and contains generated passwords, so it lives in a private, encrypted,
+  # versioned bucket (created by deploy/aws/01-bootstrap-state.sh, the one thing Terraform cannot make for itself).
+  # A backend block cannot use variables, so the names are written out here.
   backend "s3" {
     bucket       = "cloudart-prod-tfstate-589531223229"
     key          = "prod/terraform.tfstate"
@@ -21,7 +22,8 @@ terraform {
 provider "aws" {
   region = var.region
 
-  # The mandatory tags are applied to EVERY resource automatically. Each resource adds its own "Component" tag.
+  # The mandatory tags are applied to EVERY resource automatically (including inside the modules).
+  # Each resource adds its own "Component" tag.
   default_tags {
     tags = {
       Project     = "CloudArt"

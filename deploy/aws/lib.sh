@@ -43,3 +43,8 @@ retry() {
 }
 
 say() { printf '\n== %s\n' "$*"; }
+
+# The Terraform environment folder (the modules it uses live in deploy/terraform/modules).
+TF_DIR="$(git rev-parse --show-toplevel)/deploy/terraform/environments/prod"
+# tf_out <output-name>   ->  the value of a Terraform output, e.g.  tf_out site_url
+tf_out() { (cd "$TF_DIR" && terraform output -raw "$1"); }

@@ -1,0 +1,14 @@
+# Copy to terraform.tfvars (git-ignored) and fill in. Anything left out uses the default from variables.tf.
+
+# Receives alarm and budget e-mails. AWS sends a confirmation link first; nothing arrives until it is clicked.
+# alert_email = "you@example.com"
+
+# The first administrator. Set it, apply, deploy (deploy/aws/05-ship.sh), then register this same address on the site:
+# the first login links the admin account.
+# admin_email = "you@example.com"
+
+# Bigger or smaller server (ARM only): t4g.micro (1 GiB), t4g.small (2 GiB), t4g.medium (4 GiB)
+# instance_type = "t4g.small"
+
+# Switch the website security policy from "log only" to "block" once a video lesson was watched on the live site with no violations.
+# csp_mode = "enforce"

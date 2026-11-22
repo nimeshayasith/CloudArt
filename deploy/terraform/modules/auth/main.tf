@@ -1,13 +1,12 @@
-# ── LOGIN (production Cognito pool) ────────────────────────────────────────────────────────────────────────
-# A NEW pool, separate from the development one, so real students never mix with automated test accounts.
-# Settings copy the dev pool (read with `aws cognito-idp describe-user-pool`), plus deletion protection.
+# Login: a Cognito user pool for the production site, separate from the development pool so real students never mix with
+# automated test accounts. The settings copy the dev pool (read with `aws cognito-idp describe-user-pool`) plus deletion protection.
 
 resource "aws_cognito_user_pool" "main" {
   name                     = "${var.name}-users"
   username_attributes      = ["email"]
   auto_verified_attributes = ["email"]
   mfa_configuration        = "OFF"
-  deletion_protection      = "ACTIVE" # to destroy: set INACTIVE first (see docs/deployment-log.md, Teardown)
+  deletion_protection      = var.deletion_protection
   user_pool_tier           = "ESSENTIALS"
 
   password_policy {

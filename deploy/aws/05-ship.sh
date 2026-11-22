@@ -10,9 +10,8 @@ cd "$(git rev-parse --show-toplevel)"
 [ -z "$(git status --porcelain)" ] || { echo "The working tree has uncommitted changes. Commit first so the release matches a commit."; git status --short; exit 1; }
 RELEASE=$(git rev-parse --short HEAD)
 
-TF="deploy/terraform"
-BUCKET=$(cd $TF && terraform output -raw backups_bucket)
-INSTANCE=$(cd $TF && terraform output -raw server_instance_id)
+BUCKET=$(tf_out backups_bucket)
+INSTANCE=$(tf_out server_instance_id)
 KEY=artifacts/cloudart-$RELEASE.tar.gz
 
 say "Archive release $RELEASE (backend/ and deploy/ only) and upload to s3://$BUCKET/$KEY"

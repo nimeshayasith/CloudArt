@@ -1,6 +1,13 @@
-# ── OPERATIONS: alerts, budget, logs, backups, alarms ──────────────────────────────────────────────────────
-# One server holds the database (risk R2 in the deployment log), so these are not optional extras: they are what makes
-# the design safe enough to run.
+# Alerts, budget, logs, snapshots and alarms. One server holds the database (risk R2 in the deployment log), so these are not
+# optional extras: they are what makes the design safe enough to run.
+
+data "aws_caller_identity" "current" {}
+
+locals {
+  account_id = data.aws_caller_identity.current.account_id
+}
+
+# ── Alerts ────────────────────────────────────────────────────────────────────────────────────────────────────
 
 resource "aws_sns_topic" "alerts" {
   name = "${var.name}-alerts"
@@ -104,13 +111,16 @@ resource "aws_budgets_budget" "monthly" {
   depends_on = [aws_sns_topic_policy.alerts]
 }
 
+# ── Logs ──────────────────────────────────────────────────────────────────────────────────────────────────────
+
 resource "aws_cloudwatch_log_group" "api" {
-  name              = local.log_group
-  retention_in_days = 30
+  name              = var.log_group_name
+  retention_in_days = var.log_retention_days
   tags              = { Component = "logs" }
 }
 
-# ── Daily snapshots of the database disk ──
+# ── Daily snapshots of the database disk ─────────────────────────────────────────────────────────────────────
+
 data "aws_iam_policy_document" "dlm_assume" {
   statement {
     actions = ["sts:AssumeRole"]
@@ -133,13 +143,13 @@ resource "aws_iam_role_policy_attachment" "dlm" {
 }
 
 resource "aws_dlm_lifecycle_policy" "daily" {
-  description        = "CloudArt daily snapshot of the database disk - keep 7"
+  description        = "CloudArt daily snapshot of the database disk - keep ${var.snapshot_retention_count}"
   execution_role_arn = aws_iam_role.dlm.arn
   state              = "ENABLED"
 
   policy_details {
     resource_types = ["VOLUME"]
-    target_tags    = { Snapshot = "daily" } # the data disk carries this tag (compute.tf)
+    target_tags    = var.snapshot_tag # the database disk carries this tag (server module)
 
     schedule {
       name = "daily"
@@ -149,7 +159,7 @@ resource "aws_dlm_lifecycle_policy" "daily" {
         times         = ["21:00"] # 02:30 in India
       }
       retain_rule {
-        count = 7
+        count = var.snapshot_retention_count
       }
       copy_tags = true
     }
@@ -158,15 +168,16 @@ resource "aws_dlm_lifecycle_policy" "daily" {
   tags = { Component = "backups" }
 }
 
-# ── Alarms (all publish to the alerts topic) ──
-# The first two also let AWS repair the server by itself: if the hardware under it fails, AWS moves it to healthy hardware
+# ── Alarms (all publish to the alerts topic) ─────────────────────────────────────────────────────────────────
+# The first one also lets AWS repair the server by itself: if the hardware under it fails, AWS moves it to healthy hardware
 # (same disks, same Elastic IP).
+
 resource "aws_cloudwatch_metric_alarm" "system_check" {
   alarm_name          = "${var.name}-server-hardware-failed"
   alarm_description   = "AWS reports a hardware/system problem with the server; it is recovered automatically."
   namespace           = "AWS/EC2"
   metric_name         = "StatusCheckFailed_System"
-  dimensions          = { InstanceId = aws_instance.api.id }
+  dimensions          = { InstanceId = var.instance_id }
   statistic           = "Maximum"
   period              = 60
   evaluation_periods  = 2
@@ -182,7 +193,7 @@ resource "aws_cloudwatch_metric_alarm" "instance_check" {
   alarm_description   = "The server's operating system is not responding. Check it with SSM; reboot if needed."
   namespace           = "AWS/EC2"
   metric_name         = "StatusCheckFailed_Instance"
-  dimensions          = { InstanceId = aws_instance.api.id }
+  dimensions          = { InstanceId = var.instance_id }
   statistic           = "Maximum"
   period              = 60
   evaluation_periods  = 3
@@ -198,7 +209,7 @@ resource "aws_cloudwatch_metric_alarm" "cpu_credits" {
   alarm_description   = "The server is using more CPU than its baseline for a long time and will be throttled. Consider a bigger size."
   namespace           = "AWS/EC2"
   metric_name         = "CPUCreditBalance"
-  dimensions          = { InstanceId = aws_instance.api.id }
+  dimensions          = { InstanceId = var.instance_id }
   statistic           = "Minimum"
   period              = 300
   evaluation_periods  = 3
@@ -217,7 +228,7 @@ resource "aws_cloudwatch_metric_alarm" "disk" {
   alarm_description   = "The ${each.value} disk is over 80% full (a full disk stops the database)."
   namespace           = "CloudArt/Server"
   metric_name         = "disk_used_percent"
-  dimensions          = { InstanceId = aws_instance.api.id, path = each.value, fstype = "xfs" }
+  dimensions          = { InstanceId = var.instance_id, path = each.value, fstype = "xfs" }
   statistic           = "Maximum"
   period              = 300
   evaluation_periods  = 2
@@ -233,7 +244,7 @@ resource "aws_cloudwatch_metric_alarm" "memory" {
   alarm_description   = "Memory use is over 90%."
   namespace           = "CloudArt/Server"
   metric_name         = "mem_used_percent"
-  dimensions          = { InstanceId = aws_instance.api.id }
+  dimensions          = { InstanceId = var.instance_id }
   statistic           = "Maximum"
   period              = 300
   evaluation_periods  = 3
@@ -250,7 +261,7 @@ resource "aws_cloudwatch_metric_alarm" "backup" {
   alarm_description   = "No successful database backup in the last 26 hours."
   namespace           = "CloudArt/Server"
   metric_name         = "BackupSuccess"
-  dimensions          = { InstanceId = aws_instance.api.id }
+  dimensions          = { InstanceId = var.instance_id }
   statistic           = "Sum"
   period              = 86400
   evaluation_periods  = 1

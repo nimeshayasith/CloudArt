@@ -1,10 +1,13 @@
-# ── S3 BUCKETS ─────────────────────────────────────────────────────────────────────────────────────────────
 #  uploads  payment screenshots and client files. Private; only the server's role can read/write.
 #  backups  database dumps (db/) and the shipped application archives (artifacts/).
-#  site     the React build. Private; only our CloudFront distribution can read it.
-# All of them: every kind of public access blocked, encrypted at rest, HTTPS-only.
+#  site     the React build. Private; the policy that lets CloudFront read it lives in the cdn module.
+# All of them: every kind of public access blocked, encrypted at rest, objects owned by the bucket owner (ACLs off).
+
+data "aws_caller_identity" "current" {}
 
 locals {
+  account_id = data.aws_caller_identity.current.account_id
+
   buckets = {
     uploads = "${var.name}-uploads-${local.account_id}"
     backups = "${var.name}-backups-${local.account_id}"
@@ -45,7 +48,7 @@ resource "aws_s3_bucket_server_side_encryption_configuration" "this" {
   }
 }
 
-# Uploads are versioned: a bug or a mistaken delete can be undone. Old versions are removed after 30 days.
+# Uploads are versioned: a bug or a mistaken delete can be undone. Old versions are removed after the retention period.
 resource "aws_s3_bucket_versioning" "uploads" {
   bucket = aws_s3_bucket.this["uploads"].id
   versioning_configuration {
@@ -61,7 +64,7 @@ resource "aws_s3_bucket_lifecycle_configuration" "uploads" {
     status = "Enabled"
     filter {}
     noncurrent_version_expiration {
-      noncurrent_days = 30
+      noncurrent_days = var.noncurrent_version_days
     }
     abort_incomplete_multipart_upload {
       days_after_initiation = 7
@@ -78,7 +81,7 @@ resource "aws_s3_bucket_lifecycle_configuration" "backups" {
       prefix = "db/"
     }
     expiration {
-      days = 30
+      days = var.backup_retention_days
     }
   }
   rule {
@@ -113,7 +116,7 @@ resource "aws_s3_bucket_lifecycle_configuration" "site" {
   }
 }
 
-# HTTPS-only policy for the private buckets.
+# HTTPS-only policy for the two private buckets.
 data "aws_iam_policy_document" "tls_only" {
   for_each = toset(["uploads", "backups"])
   statement {
@@ -137,45 +140,5 @@ resource "aws_s3_bucket_policy" "private" {
   for_each   = data.aws_iam_policy_document.tls_only
   bucket     = aws_s3_bucket.this[each.key].id
   policy     = each.value.json
-  depends_on = [aws_s3_bucket_public_access_block.this]
-}
-
-# The site bucket: HTTPS-only, and readable ONLY by our CloudFront distribution (through Origin Access Control).
-data "aws_iam_policy_document" "site" {
-  statement {
-    sid       = "TlsOnly"
-    effect    = "Deny"
-    actions   = ["s3:*"]
-    resources = [aws_s3_bucket.this["site"].arn, "${aws_s3_bucket.this["site"].arn}/*"]
-    principals {
-      type        = "*"
-      identifiers = ["*"]
-    }
-    condition {
-      test     = "Bool"
-      variable = "aws:SecureTransport"
-      values   = ["false"]
-    }
-  }
-  statement {
-    sid       = "ReadOnlyFromOurCloudFront"
-    effect    = "Allow"
-    actions   = ["s3:GetObject"]
-    resources = ["${aws_s3_bucket.this["site"].arn}/*"]
-    principals {
-      type        = "Service"
-      identifiers = ["cloudfront.amazonaws.com"]
-    }
-    condition {
-      test     = "StringEquals"
-      variable = "AWS:SourceArn"
-      values   = [aws_cloudfront_distribution.main.arn]
-    }
-  }
-}
-
-resource "aws_s3_bucket_policy" "site" {
-  bucket     = aws_s3_bucket.this["site"].id
-  policy     = data.aws_iam_policy_document.site.json
   depends_on = [aws_s3_bucket_public_access_block.this]
 }

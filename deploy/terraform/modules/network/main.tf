@@ -1,10 +1,12 @@
-# ── NETWORK ────────────────────────────────────────────────────────────────────────────────────────────────
-# A dedicated VPC, so CloudArt shares nothing with the other projects in this account (10.0.0.0/16 and the default VPC
-# already exist; 10.20.0.0/16 does not overlap). No NAT gateway (it would cost ~35 USD a month): the server sits in a
-# public subnet and is protected by its security group instead.
+# A dedicated VPC, so CloudArt shares nothing with the other projects in the account. No NAT gateway (about 35 USD a month):
+# the server sits in a public subnet and is protected by its security group instead.
+
+data "aws_availability_zones" "available" {
+  state = "available"
+}
 
 resource "aws_vpc" "main" {
-  cidr_block           = "10.20.0.0/16"
+  cidr_block           = var.vpc_cidr
   enable_dns_support   = true
   enable_dns_hostnames = true
   tags                 = { Name = "${var.name}-vpc", Component = "network" }
@@ -15,9 +17,9 @@ resource "aws_internet_gateway" "main" {
   tags   = { Name = "${var.name}-igw", Component = "network" }
 }
 
-# Two subnets in two zones (free). Option A uses only the first; the second keeps the door open for RDS or a second server later.
+# Subnets in different zones are free. Option A uses only the first; the others keep the door open for RDS or a second server.
 resource "aws_subnet" "public" {
-  count                   = 2
+  count                   = var.public_subnet_count
   vpc_id                  = aws_vpc.main.id
   cidr_block              = cidrsubnet(aws_vpc.main.cidr_block, 8, count.index + 1)
   availability_zone       = data.aws_availability_zones.available.names[count.index]
@@ -37,7 +39,7 @@ resource "aws_route" "internet" {
 }
 
 resource "aws_route_table_association" "public" {
-  count          = 2
+  count          = var.public_subnet_count
   subnet_id      = aws_subnet.public[count.index].id
   route_table_id = aws_route_table.public.id
 }
@@ -68,7 +70,7 @@ resource "aws_security_group" "api" {
   vpc_id      = aws_vpc.main.id
 
   # Only CloudFront may connect, and only to port 80. There is NO ssh rule: the server is managed through SSM Session Manager.
-  # (The prefix list is shared by every CloudFront customer, which is why the API also checks a secret header: ORIGIN_VERIFY_SECRET.)
+  # (The prefix list is shared by every CloudFront customer, which is why the API also checks a secret header.)
   ingress {
     description     = "HTTP from CloudFront"
     from_port       = 80

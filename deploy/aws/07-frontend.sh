@@ -10,10 +10,9 @@
 #                           wrongly. The script sets the right type for the types the site uses.
 source "$(dirname "$0")/lib.sh"
 cd "$(git rev-parse --show-toplevel)"
-TF=deploy/terraform
-SITE=$(cd $TF && terraform output -raw site_bucket)
-DIST=$(cd $TF && terraform output -raw cloudfront_distribution_id)
-URL=$(cd $TF && terraform output -raw site_url)
+SITE=$(tf_out site_bucket)
+DIST=$(tf_out cloudfront_distribution_id)
+URL=$(tf_out site_url)
 
 say "Build (VITE_API_URL=/api/v1)"
 [ -d frontend/node_modules ] || (cd frontend && npm ci --no-audit --no-fund >/dev/null)   # reuse installed packages if present

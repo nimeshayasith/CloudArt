@@ -11,7 +11,7 @@ variable "name" {
 }
 
 variable "instance_type" {
-  description = "Server size. t4g.small = 2 GiB memory (about 8 USD a month); t4g.micro = 1 GiB (about 4 USD)."
+  description = "Server size (ARM only). t4g.small = 2 GiB memory (about 8 USD a month); t4g.micro = 1 GiB (about 4 USD)."
   type        = string
   default     = "t4g.small"
 }
@@ -50,4 +50,10 @@ variable "cloudfront_price_class" {
   description = "PriceClass_All includes India and the rest of Asia (PriceClass_100 would not)."
   type        = string
   default     = "PriceClass_All"
+}
+
+variable "csp_mode" {
+  description = "Content-Security-Policy mode for the website: report-only (log violations) or enforce (block them)."
+  type        = string
+  default     = "report-only"
 }

@@ -10,11 +10,10 @@
 #   F. cleanup                            removes the user (Cognito + database), the request and the uploaded file
 source "$(dirname "$0")/lib.sh"
 cd "$(git rev-parse --show-toplevel)"
-TF=deploy/terraform
-URL=$(cd $TF && terraform output -raw site_url)
-POOL=$(cd $TF && terraform output -raw cognito_user_pool_id)
-UPLOADS=$(cd $TF && terraform output -raw uploads_bucket)
-LOGGROUP=$(cd $TF && terraform output -raw log_group)
+URL=$(tf_out site_url)
+POOL=$(tf_out cognito_user_pool_id)
+UPLOADS=$(tf_out uploads_bucket)
+LOGGROUP=$(tf_out log_group)
 TS=$(date +%s)
 EMAIL="success+cloudartprodsmoke$TS@simulator.amazonses.com"
 USERNAME="smoke_$TS"

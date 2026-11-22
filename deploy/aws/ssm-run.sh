@@ -5,7 +5,7 @@
 # --parameters JSON safely, which hand-written quoting in the shell did not (see error E6 in the deployment log).
 source "$(dirname "$0")/lib.sh"
 CMD=${1:?usage: ssm-run.sh '<shell command>'}
-INSTANCE=${INSTANCE:-$(cd "$(dirname "$0")/../terraform" && terraform output -raw server_instance_id)}
+INSTANCE=${INSTANCE:-$(tf_out server_instance_id)}
 TIMEOUT_POLLS=${TIMEOUT_POLLS:-120}
 
 PARAMS=$(python -c 'import json,sys; print(json.dumps({"commands":[sys.argv[1]]}))' "$CMD")

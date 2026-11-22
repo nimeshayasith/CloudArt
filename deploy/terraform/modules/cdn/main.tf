@@ -1,6 +1,6 @@
-# ── CLOUDFRONT: one HTTPS address for the website AND the API ───────────────────────────────────────────────
-#   /api/*   → the EC2 server (never cached; every header, including Authorization and X-File-Name, is forwarded)
-#   anything else → the private S3 bucket holding the React build
+# CloudFront: one HTTPS address for the website AND the API.
+#   /api/*        -> the EC2 server (never cached; every header, including Authorization and X-File-Name, is forwarded)
+#   anything else -> the private S3 bucket holding the React build
 # One address for both means no CORS and no domain name are needed to go live.
 
 data "aws_cloudfront_cache_policy" "optimized" {
@@ -14,6 +14,13 @@ data "aws_cloudfront_cache_policy" "disabled" {
 # Sends all of the visitor's headers to the origin except Host (which must be the origin's own name).
 data "aws_cloudfront_origin_request_policy" "all_viewer_except_host" {
   name = "Managed-AllViewerExceptHostHeader"
+}
+
+# The secret CloudFront adds to every request it sends to the API (header X-Origin-Verify). The API refuses requests without it,
+# because the security-group rule alone admits ANY CloudFront customer. Generated here, exported to the settings module.
+resource "random_password" "origin" {
+  length  = 48
+  special = false
 }
 
 # Origin Access Control: CloudFront signs its requests to S3, so the bucket can stay completely private.
@@ -34,6 +41,16 @@ resource "aws_cloudfront_function" "spa" {
   comment = "Serve index.html for React routes"
   publish = true
   code    = file("${path.module}/templates/spa-rewrite.js")
+}
+
+locals {
+  csp_enforced = var.csp_mode == "enforce"
+
+  # Extra headers that are always sent, plus the report-only policy while csp_mode is "report-only".
+  custom_headers = concat(
+    [{ header = "Permissions-Policy", value = "camera=(), microphone=(), geolocation=(), payment=()" }],
+    local.csp_enforced ? [] : [{ header = "Content-Security-Policy-Report-Only", value = var.content_security_policy }],
+  )
 }
 
 resource "aws_cloudfront_response_headers_policy" "site" {
@@ -57,20 +74,26 @@ resource "aws_cloudfront_response_headers_policy" "site" {
       referrer_policy = "strict-origin-when-cross-origin"
       override        = true
     }
+
+    # REPORT-ONLY first (the browser logs what the policy would block but blocks nothing), so a mistake cannot break the site.
+    # Set csp_mode = "enforce" once a real video lesson has been watched on the live site with no violations in the console.
+    dynamic "content_security_policy" {
+      for_each = local.csp_enforced ? [1] : []
+      content {
+        content_security_policy = var.content_security_policy
+        override                = true
+      }
+    }
   }
 
   custom_headers_config {
-    items {
-      header   = "Permissions-Policy"
-      value    = "camera=(), microphone=(), geolocation=(), payment=()"
-      override = true
-    }
-    # REPORT-ONLY first: the browser logs anything the policy would block but blocks nothing, so a mistake cannot break the site.
-    # It is switched to an enforcing Content-Security-Policy after the smoke test shows no violations (see the deployment log).
-    items {
-      header   = "Content-Security-Policy-Report-Only"
-      value    = "default-src 'self'; script-src 'self' https://www.youtube.com https://s.ytimg.com; style-src 'self' 'unsafe-inline' https://fonts.googleapis.com; font-src 'self' https://fonts.gstatic.com data:; img-src 'self' data: blob: https://i.ytimg.com; frame-src https://www.youtube-nocookie.com https://www.youtube.com; connect-src 'self'; object-src 'none'; base-uri 'self'; form-action 'self'; frame-ancestors 'none'"
-      override = true
+    dynamic "items" {
+      for_each = local.custom_headers
+      content {
+        header   = items.value.header
+        value    = items.value.value
+        override = true
+      }
     }
   }
 }
@@ -79,23 +102,23 @@ resource "aws_cloudfront_distribution" "main" {
   enabled             = true
   is_ipv6_enabled     = true
   http_version        = "http2and3"
-  price_class         = var.cloudfront_price_class
+  price_class         = var.price_class
   default_root_object = "index.html"
   comment             = "CloudArt production"
 
   # Origin 1: the website files in the private bucket.
   origin {
     origin_id                = "site"
-    domain_name              = aws_s3_bucket.this["site"].bucket_regional_domain_name
+    domain_name              = var.site_bucket_regional_domain_name
     origin_access_control_id = aws_cloudfront_origin_access_control.site.id
   }
 
   # Origin 2: the API server. CloudFront-to-server traffic is plain HTTP on port 80 inside AWS (the visitor's connection is
-  # HTTPS); a custom CloudFront domain cannot present a certificate for an EC2 name. The secret header proves a request came
-  # through THIS distribution: the security group already limits the port to CloudFront, and the API refuses requests without it.
+  # HTTPS); a *.cloudfront.net distribution cannot present a certificate for an EC2 name. The secret header proves a request came
+  # through THIS distribution.
   origin {
     origin_id   = "api"
-    domain_name = local.api_origin_dns
+    domain_name = var.api_origin_domain
 
     custom_origin_config {
       http_port                = 80
@@ -149,4 +172,44 @@ resource "aws_cloudfront_distribution" "main" {
   }
 
   tags = { Component = "cdn" }
+}
+
+# The website bucket: HTTPS-only, and readable ONLY by this distribution (through Origin Access Control).
+# It lives here, not in the storage module, because it needs this distribution's ARN.
+data "aws_iam_policy_document" "site" {
+  statement {
+    sid       = "TlsOnly"
+    effect    = "Deny"
+    actions   = ["s3:*"]
+    resources = [var.site_bucket_arn, "${var.site_bucket_arn}/*"]
+    principals {
+      type        = "*"
+      identifiers = ["*"]
+    }
+    condition {
+      test     = "Bool"
+      variable = "aws:SecureTransport"
+      values   = ["false"]
+    }
+  }
+  statement {
+    sid       = "ReadOnlyFromOurCloudFront"
+    effect    = "Allow"
+    actions   = ["s3:GetObject"]
+    resources = ["${var.site_bucket_arn}/*"]
+    principals {
+      type        = "Service"
+      identifiers = ["cloudfront.amazonaws.com"]
+    }
+    condition {
+      test     = "StringEquals"
+      variable = "AWS:SourceArn"
+      values   = [aws_cloudfront_distribution.main.arn]
+    }
+  }
+}
+
+resource "aws_s3_bucket_policy" "site" {
+  bucket = var.site_bucket_id
+  policy = data.aws_iam_policy_document.site.json
 }
