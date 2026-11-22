@@ -28,7 +28,10 @@ COMPOSE="docker compose --env-file .env.prod -f docker-compose.prod.yml"
 SECRET=$(grep '^ORIGIN_VERIFY_SECRET=' .env.prod | cut -d= -f2-)
 
 echo "== 2. build image cloudart-api:$RELEASE"
-docker build -q -t "cloudart-api:$RELEASE" -t cloudart-api:latest "$SRC/backend"
+docker build -q -t "cloudart-api:$RELEASE" "$SRC/backend"
+# Everything below uses THIS release's image. `latest` is only moved after the new API proves healthy (step 6), so a failed
+# deploy never changes what a restart or reboot would run.
+export API_IMAGE=cloudart-api:$RELEASE
 
 echo "== 3. database"
 $COMPOSE up -d db
@@ -54,6 +57,8 @@ curl -fsS http://127.0.0.1/api/v1/health >/dev/null 2>&1 || { echo "API did not 
 echo "liveness: $(curl -fsS http://127.0.0.1/api/v1/health)"
 echo "database: $(curl -fsS -H "X-Origin-Verify: $SECRET" http://127.0.0.1/api/v1/health/db)"
 echo "origin check (no header must be refused, expect 403): $(curl -s -o /dev/null -w '%{http_code}' http://127.0.0.1/api/v1/courses)"
+
+docker tag "cloudart-api:$RELEASE" cloudart-api:latest
 
 echo "== 7. tidy"
 docker image prune -f >/dev/null

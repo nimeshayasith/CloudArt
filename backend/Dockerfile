@@ -5,6 +5,9 @@
 # ── build: install production dependencies and generate the Prisma client
 FROM node:22-bookworm-slim AS build
 WORKDIR /app
+# openssl must be present BEFORE `npm ci`: Prisma downloads the engine that matches the installed openssl, and the run stage
+# (which also has openssl) then finds it. Without this the tool tried to download one at run time and failed (error E13).
+RUN apt-get update && apt-get install -y --no-install-recommends openssl && rm -rf /var/lib/apt/lists/*
 COPY package.json package-lock.json ./
 RUN npm ci --omit=dev
 COPY prisma ./prisma
