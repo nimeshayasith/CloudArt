@@ -277,12 +277,21 @@ The old dev Cognito pool (`cloudart-dev-users`) is **not** part of this and stay
 
 ---
 
-## 8. What only you can do (handover checklist)
+## 8. Handover checklist
 
-1. **Create the first administrator.** Tell me the e-mail, or set `admin_email` in `terraform.tfvars`, apply, run `05-ship.sh` (it seeds the admin row), then register that same address on the live site and confirm the e-mailed code; the first login links the account.
-   (`ADMIN_EMAIL` was not set locally, so I did not guess one.)
-2. **Receive alerts.** Set `alert_email` in `terraform.tfvars` and apply; then click the confirmation link AWS e-mails to that address (until then alarms and budget notices go nowhere).
-3. **Root keys (R1).** Create an admin IAM user with MFA, switch the CLI, then delete the root access keys in *Security credentials*; also turn on MFA for the root login.
-4. **Switch the security policy to enforcing** (D7): watch one real lesson on the live site with the browser console open; if there is no "Content Security Policy" message, set `csp_mode = "enforce"` and apply.
-5. **E-mail from your own domain** later: Cognito's built-in sender allows about 50 e-mails a day. With a domain, verify it in SES, request production access, and switch the Cognito pool to SES.
+**Done on 2026-11-22 (stage 11 — owner e-mails).** `alert_email` and `admin_email` were put in `environments/prod/terraform.tfvars` (git-ignored, never committed)
+and applied: the plan was *1 to add, 1 to change, 0 to destroy* (an SNS e-mail subscription and the settings parameter). Then `05-ship.sh` redeployed, and the seed printed
+`Admin ensured` and created an **administrator row with a placeholder account id** (`pending:<email>`). Verified in the database: role `ADMIN`, active.
+The first login with that exact e-mail address replaces the placeholder with the real Cognito id (`provisionUser` in `backend/src/modules/users/user.service.js`), so registration can never create an administrator by itself.
+
+**Still to do (only you can):**
+
+1. **Claim the administrator account.** Open the live site, *Register* with the **same e-mail address**, enter the 6-digit code Cognito e-mails you, then log in. (Any username is fine.) After the first login the `/admin` area opens.
+2. **Confirm the alert subscription.** AWS e-mailed a "Confirm subscription" link to the alert address; the subscription shows `PendingConfirmation` until you click it. Until then alarms and budget notices go nowhere.
+3. **Switch from the root keys to your IAM admin user (risk R1).** The IAM user `TrustFeed_Admin` exists with MFA and one access key (it is in group `trustfeed`, which has `AdministratorAccess`); root already has MFA. Steps:
+   `aws configure --profile cloudart` with that user's keys → check `aws sts get-caller-identity --profile cloudart` shows `user/TrustFeed_Admin` → run `AWS_PROFILE=cloudart deploy/aws/tf.sh check` and `AWS_PROFILE=cloudart deploy/aws/ssm-run.sh 'hostname'` to prove it can do everything the scripts need →
+   only then, in the console (*Security credentials* of the root user), **deactivate, then delete the root access key**. Today `aws iam get-account-summary` still reports one root access key present.
+   (The user is shared with another project; creating a separate `cloudart-admin` user would keep the two apart.)
+4. **Switch the security policy to enforcing** (D7): watch one real lesson on the live site with the browser console open; if there is no "Content Security Policy" message, set `csp_mode = "enforce"` in `terraform.tfvars` and `deploy/aws/tf.sh apply`.
+5. **E-mail from your own domain** later: Cognito's built-in sender allows about 50 e-mails a day. With a domain, verify it in SES, request production access, and switch the pool to SES.
 6. **Optional:** run the Trivy scan (E14); consider a WAF or a custom domain with its own certificate.
