@@ -65,6 +65,22 @@ describe('POST /auth/register', () => {
     expect(res.body.error.code).toBe('USERNAME_TAKEN')
   })
 
+  it('lets the seeded admin placeholder register with its own e-mail (and the seed username), but not other people', async () => {
+    const pendingEmail = `pending${s}@test.local`
+    await prisma.user.create({
+      data: { cognitoSub: `pending:${pendingEmail}`, fullName: 'Seed Admin', username: `seedadmin${s}`, email: pendingEmail, systemRole: 'ADMIN' },
+    })
+    cognito.signUp.mockResolvedValue({})
+    // the same e-mail, using the seed's own username: allowed
+    const ok = await request(app).post('/api/v1/auth/register').send(body({ email: pendingEmail, username: `seedadmin${s}` }))
+    expect(ok.status).toBe(201)
+    expect(cognito.signUp).toHaveBeenCalledOnce()
+    // another person cannot take that username
+    const other = await request(app).post('/api/v1/auth/register').send(body({ username: `seedadmin${s}` }))
+    expect(other.status).toBe(409)
+    expect(other.body.error.code).toBe('USERNAME_TAKEN')
+  })
+
   it('maps a Cognito duplicate to 409', async () => {
     cognito.signUp.mockRejectedValue(cogErr('UsernameExistsException'))
     const res = await request(app).post('/api/v1/auth/register').send(body({ email: `other${s}@test.local`, username: `other${s}` }))

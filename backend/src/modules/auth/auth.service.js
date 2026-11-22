@@ -49,11 +49,17 @@ async function call(fn) {
 export async function register(input) {
   // Fast, friendly uniqueness checks against confirmed profiles.
   const [byEmail, byUsername] = await Promise.all([
-    prisma.user.findUnique({ where: { email: input.email }, select: { id: true } }),
+    prisma.user.findUnique({ where: { email: input.email }, select: { id: true, cognitoSub: true } }),
     prisma.user.findUnique({ where: { username: input.username }, select: { id: true } }),
   ])
-  if (byEmail) throw new HttpError(409, 'EMAIL_TAKEN', 'An account with this email already exists')
-  if (byUsername) throw new HttpError(409, 'USERNAME_TAKEN', 'That username is already taken')
+  // The seed creates the first admin as a "pending:<email>" placeholder that has no Cognito login yet.
+  // That person must be able to register with their own e-mail to claim it (the first login links the real
+  // account, see provisionUser), so the placeholder is not "taken". A row with a real login still is.
+  const claimsPendingAdmin = byEmail?.cognitoSub === `pending:${input.email}`
+  if (byEmail && !claimsPendingAdmin) throw new HttpError(409, 'EMAIL_TAKEN', 'An account with this email already exists')
+  if (byUsername && !(claimsPendingAdmin && byUsername.id === byEmail.id)) {
+    throw new HttpError(409, 'USERNAME_TAKEN', 'That username is already taken')
+  }
 
   await call(() => cognito.signUp(input))
   return { email: input.email, next: 'VERIFY_EMAIL' }
