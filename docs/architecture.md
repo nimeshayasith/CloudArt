@@ -296,7 +296,9 @@ and the login screen shows the message without keeping a session.
 
 - Local: Docker Compose PostgreSQL (`docker-compose.yml`), `backend/.env`.
 - Production: **Option A** from [`deployment-options.md`](deployment-options.md): CloudFront in front of an S3 bucket (the site) and one EC2
-  server (the API and PostgreSQL in Docker), uploads in a private S3 bucket, a separate production Cognito pool. Server files live in `deploy/`.
+  server (the API and PostgreSQL in Docker), uploads in a private S3 bucket, a separate production Cognito pool. **Live and verified.**
+  Infrastructure is Terraform in modules (`deploy/terraform`), operated with the scripts in `deploy/aws`; the full record, the errors met
+  and the runbook are in [`deployment-log.md`](deployment-log.md), the inventory and teardown in [`aws-resources.md`](aws-resources.md).
 
 **Production readiness rules (Phase 12)**
 
@@ -327,4 +329,4 @@ and the login screen shows the message without keeping a session.
 9. CloudArt Labs — done
 10. Subscriptions, vouchers and bank-transfer payments (premium content) — done
 11. Client service requests — done
-12. AWS production deployment  ← **this phase** (Option A; readiness code done, manual walkthrough stage by stage)
+12. AWS production deployment — **done** (Option A, Terraform modules, smoke-tested; remaining owner actions are in the deployment log, section 8)

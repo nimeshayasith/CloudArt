@@ -1,7 +1,9 @@
 # CloudArt — deployment options compared
 
-Written 2026-11-21 for Phase 12. **Chosen: Option A** (one EC2 server). The other options stay here as study material and as
-upgrade paths. Nothing in this document creates AWS resources.
+Written 2026-11-21 for Phase 12. **Chosen: Option A** (one EC2 server), and it is now **deployed**: see `deployment-log.md` for
+the step-by-step record, `deploy/terraform/README.md` for the code, and `aws-resources.md` for the inventory. The other options stay here
+as study material and as upgrade paths. Two facts changed after this was written: the account is on the **Paid** plan (not the Free
+Plan), and the container image is built **on the server** instead of being pulled from ECR (the ECR API is unreachable from the developer PC).
 
 ## Facts about the AWS account (checked 2026-11-20)
 

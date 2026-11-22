@@ -29,7 +29,8 @@ module "storage" {
 module "auth" {
   source = "../../modules/auth"
 
-  name = var.name
+  name                = var.name
+  deletion_protection = var.cognito_deletion_protection
 }
 
 module "operations" {

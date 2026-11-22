@@ -57,3 +57,9 @@ variable "csp_mode" {
   type        = string
   default     = "report-only"
 }
+
+variable "cognito_deletion_protection" {
+  description = "ACTIVE blocks deleting the user pool (and every student account in it). Set INACTIVE only as the first step of a teardown."
+  type        = string
+  default     = "ACTIVE"
+}

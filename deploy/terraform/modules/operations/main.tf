@@ -206,13 +206,13 @@ resource "aws_cloudwatch_metric_alarm" "instance_check" {
 
 resource "aws_cloudwatch_metric_alarm" "cpu_credits" {
   alarm_name          = "${var.name}-cpu-credits-low"
-  alarm_description   = "The server is using more CPU than its baseline for a long time and will be throttled. Consider a bigger size."
+  alarm_description   = "CPU credits have been nearly empty for a full hour, so the server runs throttled. Image builds during a deploy use credits briefly (that is normal); a whole hour is not. Consider a bigger size."
   namespace           = "AWS/EC2"
   metric_name         = "CPUCreditBalance"
   dimensions          = { InstanceId = var.instance_id }
   statistic           = "Minimum"
   period              = 300
-  evaluation_periods  = 3
+  evaluation_periods  = 12
   threshold           = 20
   comparison_operator = "LessThanThreshold"
   treat_missing_data  = "notBreaching"
